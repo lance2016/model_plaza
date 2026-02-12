@@ -19,6 +19,9 @@ interface ModelItem {
   temperature: number;
   max_tokens: number;
   sort_order: number;
+  is_reasoning_model?: number;
+  default_reasoning_effort?: string;
+  reasoning_type?: string;
 }
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
@@ -110,9 +113,18 @@ export default function ModelsPage() {
                 </div>
               </CardHeader>
               <CardContent className="pb-3">
-                <div className="flex gap-4 text-sm text-muted-foreground">
+                <div className="flex gap-4 text-sm text-muted-foreground items-center">
                   <span>Temperature: {model.temperature}</span>
                   <span>Max Tokens: {model.max_tokens}</span>
+                  {model.is_reasoning_model === 1 && (
+                    <Badge variant="secondary" className="ml-2">
+                      🧠 思考模型 
+                      {model.reasoning_type === 'binary' 
+                        ? ` (${model.default_reasoning_effort === 'enabled' ? '启用' : '禁用'})` 
+                        : ` (${model.default_reasoning_effort})`
+                      }
+                    </Badge>
+                  )}
                 </div>
               </CardContent>
             </Card>

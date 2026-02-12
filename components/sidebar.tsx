@@ -110,7 +110,7 @@ export function Sidebar({
 
       {/* Footer */}
       <div className="p-4">
-        <Link href="/settings/providers">
+        <Link href="/settings/general">
           <Button variant="ghost" className={cn('w-full justify-start', pathname?.startsWith('/settings') && 'bg-accent')}>
             <Settings className="h-4 w-4 mr-2" />
             设置

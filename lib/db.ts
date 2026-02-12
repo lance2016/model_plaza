@@ -22,6 +22,9 @@ export interface Model {
   temperature: number;
   max_tokens: number;
   sort_order: number;
+  is_reasoning_model: number;
+  default_reasoning_effort: string;
+  reasoning_type: string; // 'binary' or 'levels'
   provider_name?: string;
 }
 
@@ -35,6 +38,11 @@ export interface Conversation {
   updated_at: string;
 }
 
+export interface Settings {
+  key: string;
+  value: string;
+}
+
 // Preset data
 const PRESET_PROVIDERS = [
   { id: 'openai', name: 'OpenAI', type: 'openai_compatible', base_url: 'https://api.openai.com/v1', sort_order: 0 },
@@ -43,21 +51,22 @@ const PRESET_PROVIDERS = [
   { id: 'deepseek', name: 'DeepSeek', type: 'openai_compatible', base_url: 'https://api.deepseek.com/v1', sort_order: 3 },
   { id: 'qwen', name: '通义千问', type: 'openai_compatible', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', sort_order: 4 },
   { id: 'doubao', name: '豆包', type: 'openai_compatible', base_url: 'https://ark.cn-beijing.volces.com/api/v3', sort_order: 5 },
-  { id: 'zhipu', name: '智谱AI', type: 'openai_compatible', base_url: 'https://open.bigmodel.cn/api/paas/v4', sort_order: 6 },
+  { id: 'zhipu', name: '智谱AI', type: 'openai_compatible', base_url: 'https://open.bigmodel.cn/api/paas/v4/', sort_order: 6 },
   { id: 'moonshot', name: 'Moonshot', type: 'openai_compatible', base_url: 'https://api.moonshot.cn/v1', sort_order: 7 },
 ];
 
 const PRESET_MODELS = [
-  { id: 'gpt-4o', provider_id: 'openai', name: 'GPT-4o', sort_order: 0 },
-  { id: 'gpt-4o-mini', provider_id: 'openai', name: 'GPT-4o Mini', sort_order: 1 },
-  { id: 'claude-sonnet-4-20250514', provider_id: 'anthropic', name: 'Claude Sonnet 4', sort_order: 0 },
-  { id: 'claude-3-5-haiku-20241022', provider_id: 'anthropic', name: 'Claude 3.5 Haiku', sort_order: 1 },
-  { id: 'gemini-2.0-flash', provider_id: 'google', name: 'Gemini 2.0 Flash', sort_order: 0 },
-  { id: 'deepseek-chat', provider_id: 'deepseek', name: 'DeepSeek Chat', sort_order: 0 },
-  { id: 'deepseek-reasoner', provider_id: 'deepseek', name: 'DeepSeek Reasoner', sort_order: 1 },
-  { id: 'qwen-plus', provider_id: 'qwen', name: 'Qwen Plus', sort_order: 0 },
-  { id: 'glm-4-flash', provider_id: 'zhipu', name: 'GLM-4-Flash', sort_order: 0 },
-  { id: 'moonshot-v1-8k', provider_id: 'moonshot', name: 'Moonshot v1 8K', sort_order: 0 },
+  { id: 'gpt-4o', provider_id: 'openai', name: 'GPT-4o', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
+  { id: 'gpt-4o-mini', provider_id: 'openai', name: 'GPT-4o Mini', sort_order: 1, is_reasoning: false, reasoning_type: 'levels' },
+  { id: 'claude-sonnet-4-20250514', provider_id: 'anthropic', name: 'Claude Sonnet 4', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
+  { id: 'claude-3-5-haiku-20241022', provider_id: 'anthropic', name: 'Claude 3.5 Haiku', sort_order: 1, is_reasoning: false, reasoning_type: 'levels' },
+  { id: 'gemini-2.0-flash', provider_id: 'google', name: 'Gemini 2.0 Flash', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
+  { id: 'deepseek-chat', provider_id: 'deepseek', name: 'DeepSeek Chat', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
+  { id: 'deepseek-reasoner', provider_id: 'deepseek', name: 'DeepSeek Reasoner', sort_order: 1, is_reasoning: true, reasoning_type: 'levels' },
+  { id: 'qwen-plus', provider_id: 'qwen', name: 'Qwen Plus', sort_order: 0, is_reasoning: true, reasoning_type: 'binary' },
+  { id: 'glm-4-flash', provider_id: 'zhipu', name: 'GLM-4-Flash', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
+  { id: 'glm-zero-preview', provider_id: 'zhipu', name: 'GLM-Zero-Preview (思考)', sort_order: 1, is_reasoning: true, reasoning_type: 'binary' },
+  { id: 'moonshot-v1-8k', provider_id: 'moonshot', name: 'Moonshot v1 8K', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
 ];
 
 // Singleton
@@ -90,7 +99,10 @@ export function getDb(): Database.Database {
       enabled INTEGER DEFAULT 1,
       temperature REAL DEFAULT 0.7,
       max_tokens INTEGER DEFAULT 4096,
-      sort_order INTEGER DEFAULT 0
+      sort_order INTEGER DEFAULT 0,
+      is_reasoning_model INTEGER DEFAULT 0,
+      default_reasoning_effort TEXT DEFAULT 'medium',
+      reasoning_type TEXT DEFAULT 'levels'
     );
 
     CREATE TABLE IF NOT EXISTS conversations (
@@ -101,6 +113,11 @@ export function getDb(): Database.Database {
       token_count INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
     );
   `);
 
@@ -118,7 +135,7 @@ function seedData(database: Database.Database) {
     'INSERT OR IGNORE INTO providers (id, name, type, base_url, api_key, enabled, sort_order) VALUES (?, ?, ?, ?, \'\', 1, ?)'
   );
   const insertModel = database.prepare(
-    'INSERT OR IGNORE INTO models (id, provider_id, name, enabled, temperature, max_tokens, sort_order) VALUES (?, ?, ?, 1, 0.7, 4096, ?)'
+    'INSERT OR IGNORE INTO models (id, provider_id, name, enabled, temperature, max_tokens, sort_order, is_reasoning_model, default_reasoning_effort, reasoning_type) VALUES (?, ?, ?, 1, 0.7, 4096, ?, ?, ?, ?)'
   );
 
   const tx = database.transaction(() => {
@@ -126,7 +143,15 @@ function seedData(database: Database.Database) {
       insertProvider.run(p.id, p.name, p.type, p.base_url, p.sort_order);
     }
     for (const m of PRESET_MODELS) {
-      insertModel.run(m.id, m.provider_id, m.name, m.sort_order);
+      insertModel.run(
+        m.id, 
+        m.provider_id, 
+        m.name, 
+        m.sort_order, 
+        m.is_reasoning ? 1 : 0,
+        m.is_reasoning ? (m.reasoning_type === 'binary' ? 'enabled' : 'medium') : 'medium',
+        m.reasoning_type
+      );
     }
   });
   tx();
@@ -198,13 +223,24 @@ export function getModelsByProvider(providerId: string): Model[] {
   ).all(providerId) as Model[];
 }
 
-export function createModel(data: { id: string; provider_id: string; name: string; enabled?: number; temperature?: number; max_tokens?: number; sort_order?: number }) {
+export function createModel(data: { id: string; provider_id: string; name: string; enabled?: number; temperature?: number; max_tokens?: number; sort_order?: number; is_reasoning_model?: number; default_reasoning_effort?: string; reasoning_type?: string }) {
   getDb().prepare(
-    'INSERT INTO models (id, provider_id, name, enabled, temperature, max_tokens, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.id, data.provider_id, data.name, data.enabled ?? 1, data.temperature ?? 0.7, data.max_tokens ?? 4096, data.sort_order ?? 0);
+    'INSERT INTO models (id, provider_id, name, enabled, temperature, max_tokens, sort_order, is_reasoning_model, default_reasoning_effort, reasoning_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(
+    data.id, 
+    data.provider_id, 
+    data.name, 
+    data.enabled ?? 1, 
+    data.temperature ?? 0.7, 
+    data.max_tokens ?? 4096, 
+    data.sort_order ?? 0,
+    data.is_reasoning_model ?? 0,
+    data.default_reasoning_effort ?? 'medium',
+    data.reasoning_type ?? 'levels'
+  );
 }
 
-export function updateModel(id: string, data: Partial<{ name: string; provider_id: string; enabled: number; temperature: number; max_tokens: number; sort_order: number }>) {
+export function updateModel(id: string, data: Partial<{ name: string; provider_id: string; enabled: number; temperature: number; max_tokens: number; sort_order: number; is_reasoning_model: number; default_reasoning_effort: string; reasoning_type: string }>) {
   const sets: string[] = [];
   const values: unknown[] = [];
   if (data.name !== undefined) { sets.push('name = ?'); values.push(data.name); }
@@ -213,6 +249,9 @@ export function updateModel(id: string, data: Partial<{ name: string; provider_i
   if (data.temperature !== undefined) { sets.push('temperature = ?'); values.push(data.temperature); }
   if (data.max_tokens !== undefined) { sets.push('max_tokens = ?'); values.push(data.max_tokens); }
   if (data.sort_order !== undefined) { sets.push('sort_order = ?'); values.push(data.sort_order); }
+  if (data.is_reasoning_model !== undefined) { sets.push('is_reasoning_model = ?'); values.push(data.is_reasoning_model); }
+  if (data.default_reasoning_effort !== undefined) { sets.push('default_reasoning_effort = ?'); values.push(data.default_reasoning_effort); }
+  if (data.reasoning_type !== undefined) { sets.push('reasoning_type = ?'); values.push(data.reasoning_type); }
   if (sets.length === 0) return;
   values.push(id);
   getDb().prepare(`UPDATE models SET ${sets.join(', ')} WHERE id = ?`).run(...values);
@@ -253,4 +292,27 @@ export function updateConversation(id: string, data: Partial<{ title: string; me
 
 export function deleteConversation(id: string) {
   getDb().prepare('DELETE FROM conversations WHERE id = ?').run(id);
+}
+
+// === Settings queries ===
+
+export function getSetting(key: string): string | undefined {
+  const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+  return row?.value;
+}
+
+export function setSetting(key: string, value: string) {
+  getDb().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+}
+
+export function getAllSettings(): Record<string, string> {
+  const rows = getDb().prepare('SELECT key, value FROM settings').all() as Settings[];
+  return rows.reduce((acc, row) => {
+    acc[row.key] = row.value;
+    return acc;
+  }, {} as Record<string, string>);
+}
+
+export function clearAllConversations() {
+  getDb().prepare('DELETE FROM conversations').run();
 }

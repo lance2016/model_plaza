@@ -16,6 +16,9 @@ interface ModelFormData {
   enabled: number;
   temperature: number;
   max_tokens: number;
+  is_reasoning_model: number;
+  default_reasoning_effort: string;
+  reasoning_type: string;
 }
 
 interface ProviderItem {
@@ -33,6 +36,9 @@ function makeInitForm(data?: Partial<ModelFormData>): ModelFormData {
     enabled: data?.enabled ?? 1,
     temperature: data?.temperature ?? 0.7,
     max_tokens: data?.max_tokens ?? 4096,
+    is_reasoning_model: data?.is_reasoning_model ?? 0,
+    default_reasoning_effort: data?.default_reasoning_effort || 'medium',
+    reasoning_type: data?.reasoning_type || 'levels',
   };
 }
 
@@ -173,6 +179,91 @@ export function ModelForm({
               onCheckedChange={checked => setForm(f => ({ ...f, enabled: checked ? 1 : 0 }))}
             />
             <Label>启用</Label>
+          </div>
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.is_reasoning_model === 1}
+                onCheckedChange={checked => setForm(f => ({ ...f, is_reasoning_model: checked ? 1 : 0 }))}
+              />
+              <div>
+                <Label>思考模型</Label>
+                <p className="text-xs text-muted-foreground">支持显示推理思考过程</p>
+              </div>
+            </div>
+            {form.is_reasoning_model === 1 && (
+              <div className="space-y-4 ml-11">
+                <div className="space-y-2">
+                  <Label htmlFor="reasoning-type">思考类型</Label>
+                  <Select 
+                    value={form.reasoning_type} 
+                    onValueChange={v => setForm(f => ({ 
+                      ...f, 
+                      reasoning_type: v,
+                      // Reset default effort when changing type
+                      default_reasoning_effort: v === 'binary' ? 'enabled' : 'medium'
+                    }))}
+                  >
+                    <SelectTrigger id="reasoning-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="binary">
+                        <div className="flex flex-col items-start">
+                          <span>二进制开关</span>
+                          <span className="text-xs text-muted-foreground">仅启用/禁用（如智谱GLM）</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="levels">
+                        <div className="flex flex-col items-start">
+                          <span>多级可调</span>
+                          <span className="text-xs text-muted-foreground">支持四个级别（如豆包、DeepSeek）</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="reasoning-effort">默认设置</Label>
+                  {form.reasoning_type === 'binary' ? (
+                    <Select 
+                      value={form.default_reasoning_effort} 
+                      onValueChange={v => setForm(f => ({ ...f, default_reasoning_effort: v }))}
+                    >
+                      <SelectTrigger id="reasoning-effort">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="disabled">禁用思考</SelectItem>
+                        <SelectItem value="enabled">启用思考</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select 
+                      value={form.default_reasoning_effort} 
+                      onValueChange={v => setForm(f => ({ ...f, default_reasoning_effort: v }))}
+                    >
+                      <SelectTrigger id="reasoning-effort">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="minimal">Minimal (不思考)</SelectItem>
+                        <SelectItem value="low">Low (低)</SelectItem>
+                        <SelectItem value="medium">Medium (中等)</SelectItem>
+                        <SelectItem value="high">High (高)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {form.reasoning_type === 'binary' 
+                      ? '默认启用或禁用思考功能'
+                      : '思考程度越高，响应时间越长，但推理质量越好'
+                    }
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">

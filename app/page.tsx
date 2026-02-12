@@ -1,31 +1,92 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
+import useSWR, { mutate as globalMutate } from 'swr';
 import { MessageList } from '@/components/chat/message-list';
 import { ChatPanel } from '@/components/chat/chat-panel';
 import { ModelSelector } from '@/components/chat/model-selector';
+import { ReasoningEffortSelector } from '@/components/chat/reasoning-effort-selector';
+import { AdvancedSettings, type ChatConfig } from '@/components/chat/advanced-settings';
 import { Sidebar } from '@/components/sidebar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { v4 as uuidv4 } from 'uuid';
+
+interface Model {
+  id: string;
+  name: string;
+  is_reasoning_model: number;
+  default_reasoning_effort: string;
+  reasoning_type: string;
+}
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
 
 export default function ChatPage() {
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [reasoningEffort, setReasoningEffort] = useState<string>('medium');
+  const [chatConfig, setChatConfig] = useState<ChatConfig>({
+    systemPrompt: '',
+    temperature: 0.7,
+    maxTokens: 4096,
+    topP: 1.0,
+    frequencyPenalty: 0,
+    presencePenalty: 0,
+  });
+  
+  const { data: models = [], mutate: mutateModels } = useSWR<Model[]>('/api/models', fetcher);
+  const currentModel = models.find(m => m.id === selectedModelId);
+  const isReasoningModel = currentModel?.is_reasoning_model === 1;
 
-  // Use ref so the transport body closure always reads the latest modelId
+  // Load default model from settings
+  useEffect(() => {
+    const loadDefaultModel = async () => {
+      try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const settings = await res.json();
+          if (settings.default_model_id) {
+            setSelectedModelId(settings.default_model_id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load default model:', error);
+      }
+    };
+    
+    if (!selectedModelId) {
+      loadDefaultModel();
+    }
+  }, [selectedModelId]);
+
+  // Update reasoning effort when model changes
+  useEffect(() => {
+    if (currentModel && currentModel.is_reasoning_model === 1) {
+      setReasoningEffort(currentModel.default_reasoning_effort || 'medium');
+    }
+  }, [currentModel]);
+
+  // Use ref so the transport body closure always reads the latest values
   const selectedModelIdRef = useRef(selectedModelId);
+  const reasoningEffortRef = useRef(reasoningEffort);
+  const chatConfigRef = useRef(chatConfig);
   selectedModelIdRef.current = selectedModelId;
+  reasoningEffortRef.current = reasoningEffort;
+  chatConfigRef.current = chatConfig;
 
   const [transport] = useState(() => new DefaultChatTransport({
     api: '/api/chat',
-    body: () => ({ modelId: selectedModelIdRef.current }),
+    body: () => ({ 
+      modelId: selectedModelIdRef.current,
+      reasoningEffort: reasoningEffortRef.current,
+      chatConfig: chatConfigRef.current,
+    }),
   }));
 
   const { messages, sendMessage, status, stop, error, setMessages } = useChat({
@@ -41,6 +102,8 @@ export default function ChatPage() {
             model_id: selectedModelId,
           }),
         });
+        // Refresh conversation list to update timestamp
+        globalMutate('/api/conversations');
       } catch (e) {
         console.error('Failed to save conversation:', e);
       }
@@ -53,9 +116,8 @@ export default function ChatPage() {
     setInput('');
 
     if (!conversationId) {
-      const newId = uuidv4();
       try {
-        await fetch('/api/conversations', {
+        const res = await fetch('/api/conversations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -63,7 +125,12 @@ export default function ChatPage() {
             title: text.slice(0, 50),
           }),
         });
-        setConversationId(newId);
+        if (res.ok) {
+          const data = await res.json();
+          setConversationId(data.id);
+          // Refresh conversation list immediately after creating
+          globalMutate('/api/conversations');
+        }
       } catch (e) {
         console.error('Failed to create conversation:', e);
       }
@@ -77,6 +144,15 @@ export default function ChatPage() {
     setConversationId(undefined);
     setInput('');
     setSidebarOpen(false);
+    // Reset chat config to defaults
+    setChatConfig({
+      systemPrompt: '',
+      temperature: 0.7,
+      maxTokens: 4096,
+      topP: 1.0,
+      frequencyPenalty: 0,
+      presencePenalty: 0,
+    });
   }, [setMessages]);
 
   const handleSelectConversation = useCallback(async (id: string) => {
@@ -126,6 +202,21 @@ export default function ChatPage() {
             </SheetContent>
           </Sheet>
           <ModelSelector value={selectedModelId} onChange={setSelectedModelId} />
+          {isReasoningModel && (
+            <ReasoningEffortSelector 
+              value={reasoningEffort} 
+              onChange={setReasoningEffort}
+              disabled={!selectedModelId}
+              reasoningType={currentModel?.reasoning_type}
+            />
+          )}
+          <div className="ml-auto">
+            <AdvancedSettings 
+              config={chatConfig}
+              onChange={setChatConfig}
+              disabled={!selectedModelId}
+            />
+          </div>
         </header>
 
         {error && (

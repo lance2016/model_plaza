@@ -22,6 +22,16 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         </div>
 
         <div className="flex gap-2 mb-6 border-b">
+          <Link href="/settings/general">
+            <button className={cn(
+              'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              pathname === '/settings/general'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}>
+              通用
+            </button>
+          </Link>
           <Link href="/settings/providers">
             <button className={cn(
               'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',

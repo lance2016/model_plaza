@@ -57,9 +57,9 @@ export function MessageList({
                   }
                   if (part.type === 'reasoning') {
                     return (
-                      <details key={i} className="text-muted-foreground text-xs border rounded p-2 my-2">
-                        <summary className="cursor-pointer">思考过程</summary>
-                        <pre className="whitespace-pre-wrap mt-2">{part.reasoning}</pre>
+                      <details key={i} className="text-muted-foreground text-xs border rounded p-2 my-2 bg-muted/50">
+                        <summary className="cursor-pointer font-medium">💭 思考过程</summary>
+                        <div className="whitespace-pre-wrap mt-2 leading-relaxed">{part.text}</div>
                       </details>
                     );
                   }
