@@ -1,101 +1,153 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useCallback, useRef } from 'react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { MessageList } from '@/components/chat/message-list';
+import { ChatPanel } from '@/components/chat/chat-panel';
+import { ModelSelector } from '@/components/chat/model-selector';
+import { Sidebar } from '@/components/sidebar';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Menu, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { v4 as uuidv4 } from 'uuid';
+
+export default function ChatPage() {
+  const [selectedModelId, setSelectedModelId] = useState<string>('');
+  const [conversationId, setConversationId] = useState<string | undefined>();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [input, setInput] = useState('');
+
+  // Use ref so the transport body closure always reads the latest modelId
+  const selectedModelIdRef = useRef(selectedModelId);
+  selectedModelIdRef.current = selectedModelId;
+
+  const [transport] = useState(() => new DefaultChatTransport({
+    api: '/api/chat',
+    body: () => ({ modelId: selectedModelIdRef.current }),
+  }));
+
+  const { messages, sendMessage, status, stop, error, setMessages } = useChat({
+    transport,
+    onFinish: async (message) => {
+      if (!conversationId) return;
+      try {
+        await fetch(`/api/conversations/${conversationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: JSON.stringify([...messages, message]),
+            model_id: selectedModelId,
+          }),
+        });
+      } catch (e) {
+        console.error('Failed to save conversation:', e);
+      }
+    },
+  });
+
+  const handleSubmit = useCallback(async () => {
+    if (!input.trim() || !selectedModelId) return;
+    const text = input;
+    setInput('');
+
+    if (!conversationId) {
+      const newId = uuidv4();
+      try {
+        await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model_id: selectedModelId,
+            title: text.slice(0, 50),
+          }),
+        });
+        setConversationId(newId);
+      } catch (e) {
+        console.error('Failed to create conversation:', e);
+      }
+    }
+
+    sendMessage({ text });
+  }, [input, selectedModelId, conversationId, sendMessage]);
+
+  const handleNewChat = useCallback(() => {
+    setMessages([]);
+    setConversationId(undefined);
+    setInput('');
+    setSidebarOpen(false);
+  }, [setMessages]);
+
+  const handleSelectConversation = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/conversations/${id}`);
+      if (res.ok) {
+        const conv = await res.json();
+        setConversationId(id);
+        setMessages(JSON.parse(conv.messages));
+        if (conv.model_id) {
+          setSelectedModelId(conv.model_id);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load conversation:', e);
+    }
+    setSidebarOpen(false);
+  }, [setMessages]);
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+    <div className="flex h-screen">
+      {/* Desktop sidebar */}
+      <aside className="w-64 border-r bg-muted/40 flex-shrink-0 hidden md:flex flex-col">
+        <Sidebar
+          currentConversationId={conversationId}
+          onNewChat={handleNewChat}
+          onSelectConversation={handleSelectConversation}
         />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+      </aside>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="flex items-center gap-2 p-3 border-b">
+          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0">
+              <Sidebar
+                currentConversationId={conversationId}
+                onNewChat={handleNewChat}
+                onSelectConversation={handleSelectConversation}
+              />
+            </SheetContent>
+          </Sheet>
+          <ModelSelector value={selectedModelId} onChange={setSelectedModelId} />
+        </header>
+
+        {error && (
+          <Alert variant="destructive" className="m-3 mb-0">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error.message}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex-1 overflow-hidden">
+          <MessageList messages={messages} status={status} />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <ChatPanel
+          input={input}
+          setInput={setInput}
+          onSubmit={handleSubmit}
+          onStop={stop}
+          status={status}
+          disabled={!selectedModelId}
+        />
+      </div>
     </div>
   );
 }
