@@ -269,6 +269,16 @@ export function getAllConversations(): Omit<Conversation, 'messages'>[] {
   ).all() as Omit<Conversation, 'messages'>[];
 }
 
+export function searchConversations(query: string): Omit<Conversation, 'messages'>[] {
+  const searchPattern = `%${query}%`;
+  return getDb().prepare(
+    `SELECT id, model_id, title, token_count, created_at, updated_at 
+     FROM conversations 
+     WHERE title LIKE ? OR messages LIKE ?
+     ORDER BY updated_at DESC`
+  ).all(searchPattern, searchPattern) as Omit<Conversation, 'messages'>[];
+}
+
 export function getConversation(id: string): Conversation | undefined {
   return getDb().prepare('SELECT * FROM conversations WHERE id = ?').get(id) as Conversation | undefined;
 }

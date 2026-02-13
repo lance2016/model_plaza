@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -35,11 +35,37 @@ export function Sidebar({
   const { data: conversations = [], mutate } = useSWR<ConversationItem[]>('/api/conversations', fetcher);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ConversationItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Filter conversations based on search
-  const filteredConversations = conversations.filter(conv => 
-    conv.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Search conversations (debounced)
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/conversations/search?q=${encodeURIComponent(searchQuery)}`);
+        if (res.ok) {
+          const results = await res.json();
+          setSearchResults(results);
+        }
+      } catch (error) {
+        console.error('Search failed:', error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Display search results if searching, otherwise show all conversations
+  const displayConversations = searchQuery.trim() ? searchResults : conversations;
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -79,7 +105,7 @@ export function Sidebar({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="搜索对话..."
+            placeholder="搜索标题或内容..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="h-9 pl-9 pr-9 text-sm bg-background/50 border-border/50"
@@ -100,12 +126,17 @@ export function Sidebar({
       {/* Conversation list */}
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-0.5">
-          {filteredConversations.length === 0 && searchQuery && (
+          {displayConversations.length === 0 && searchQuery && !isSearching && (
             <div className="text-center py-8 text-sm text-muted-foreground">
               未找到匹配的对话
             </div>
           )}
-          {filteredConversations.map((conv) => {
+          {isSearching && (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              搜索中...
+            </div>
+          )}
+          {displayConversations.map((conv) => {
             const isStreaming = streamingConversationIds.includes(conv.id);
             return (
             <div
