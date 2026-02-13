@@ -35,7 +35,7 @@ export default function ModelsPage() {
 
   const handleToggle = async (id: string, enabled: boolean) => {
     try {
-      await fetch(`/api/models/${id}`, {
+      await fetch(`/api/models/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: enabled ? 1 : 0 }),
@@ -50,7 +50,7 @@ export default function ModelsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm(`确定删除模型 "${id}"？`)) return;
     try {
-      await fetch(`/api/models/${id}`, { method: 'DELETE' });
+      await fetch(`/api/models/${encodeURIComponent(id)}`, { method: 'DELETE' });
       mutate();
       toast({ title: '模型已删除' });
     } catch {

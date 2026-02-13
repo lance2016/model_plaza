@@ -71,7 +71,7 @@ export function Sidebar({
     e.stopPropagation();
     setDeletingId(id);
     try {
-      await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+      await fetch(`/api/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
       mutate();
       if (currentConversationId === id) {
         onNewChat();

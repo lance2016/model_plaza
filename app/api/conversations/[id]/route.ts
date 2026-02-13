@@ -3,7 +3,8 @@ import { getConversation, updateConversation, deleteConversation } from '@/lib/d
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const conversation = getConversation(params.id);
+    const id = decodeURIComponent(params.id);
+    const conversation = getConversation(id);
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
@@ -16,12 +17,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
-    const conversation = getConversation(params.id);
+    const id = decodeURIComponent(params.id);
+    const conversation = getConversation(id);
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
     const body = await req.json();
-    updateConversation(params.id, body);
+    updateConversation(id, body);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('PUT /api/conversations/[id] error:', error);
@@ -32,7 +34,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   try {
-    deleteConversation(params.id);
+    const id = decodeURIComponent(params.id);
+    deleteConversation(id);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('DELETE /api/conversations/[id] error:', error);

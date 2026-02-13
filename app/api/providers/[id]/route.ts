@@ -3,7 +3,8 @@ import { getProvider, updateProvider, deleteProvider } from '@/lib/db';
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const provider = getProvider(params.id);
+    const id = decodeURIComponent(params.id);
+    const provider = getProvider(id);
     if (!provider) {
       return NextResponse.json({ error: 'Provider not found' }, { status: 404 });
     }
@@ -20,7 +21,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
-    const provider = getProvider(params.id);
+    const id = decodeURIComponent(params.id);
+    const provider = getProvider(id);
     if (!provider) {
       return NextResponse.json({ error: 'Provider not found' }, { status: 404 });
     }
@@ -31,9 +33,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     if (body.type !== undefined) updates.type = body.type;
     if (body.base_url !== undefined) updates.base_url = body.base_url;
     if (body.api_key !== undefined) updates.api_key = body.api_key;
+    if (body.api_format !== undefined) updates.api_format = body.api_format;
     if (body.enabled !== undefined) updates.enabled = body.enabled;
     if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
-    updateProvider(params.id, updates);
+    updateProvider(id, updates);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('PUT /api/providers/[id] error:', error);
@@ -44,7 +47,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   try {
-    deleteProvider(params.id);
+    const id = decodeURIComponent(params.id);
+    deleteProvider(id);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('DELETE /api/providers/[id] error:', error);

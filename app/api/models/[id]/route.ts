@@ -3,7 +3,8 @@ import { getModel, updateModel, deleteModel } from '@/lib/db';
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const model = getModel(params.id);
+    const id = decodeURIComponent(params.id);
+    const model = getModel(id);
     if (!model) {
       return NextResponse.json({ error: 'Model not found' }, { status: 404 });
     }
@@ -16,12 +17,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
-    const model = getModel(params.id);
+    const id = decodeURIComponent(params.id);
+    const model = getModel(id);
     if (!model) {
       return NextResponse.json({ error: 'Model not found' }, { status: 404 });
     }
     const body = await req.json();
-    updateModel(params.id, body);
+    updateModel(id, body);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('PUT /api/models/[id] error:', error);
@@ -32,7 +34,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   try {
-    deleteModel(params.id);
+    const id = decodeURIComponent(params.id);
+    deleteModel(id);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('DELETE /api/models/[id] error:', error);

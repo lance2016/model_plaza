@@ -9,6 +9,7 @@ export interface Provider {
   type: 'openai_compatible' | 'anthropic' | 'google';
   base_url: string;
   api_key: string;
+  api_format: 'completion' | 'responses';
   enabled: number;
   sort_order: number;
   created_at: string;
@@ -121,6 +122,12 @@ export function getDb(): Database.Database {
     );
   `);
 
+  // Migrations
+  const columns = db.prepare("PRAGMA table_info(providers)").all() as { name: string }[];
+  if (!columns.some(c => c.name === 'api_format')) {
+    db.exec("ALTER TABLE providers ADD COLUMN api_format TEXT DEFAULT 'completion'");
+  }
+
   // Auto-seed if empty
   const count = db.prepare('SELECT COUNT(*) as count FROM providers').get() as { count: number };
   if (count.count === 0) {
@@ -172,20 +179,21 @@ export function getProvider(id: string): Provider | undefined {
   return row;
 }
 
-export function createProvider(data: { id: string; name: string; type: string; base_url: string; api_key?: string; enabled?: number; sort_order?: number }) {
+export function createProvider(data: { id: string; name: string; type: string; base_url: string; api_key?: string; api_format?: string; enabled?: number; sort_order?: number }) {
   const encryptedKey = data.api_key ? encrypt(data.api_key) : '';
   getDb().prepare(
-    'INSERT INTO providers (id, name, type, base_url, api_key, enabled, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.id, data.name, data.type, data.base_url, encryptedKey, data.enabled ?? 1, data.sort_order ?? 0);
+    'INSERT INTO providers (id, name, type, base_url, api_key, api_format, enabled, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.id, data.name, data.type, data.base_url, encryptedKey, data.api_format ?? 'completion', data.enabled ?? 1, data.sort_order ?? 0);
 }
 
-export function updateProvider(id: string, data: Partial<{ name: string; type: string; base_url: string; api_key: string; enabled: number; sort_order: number }>) {
+export function updateProvider(id: string, data: Partial<{ name: string; type: string; base_url: string; api_key: string; api_format: string; enabled: number; sort_order: number }>) {
   const sets: string[] = [];
   const values: unknown[] = [];
   if (data.name !== undefined) { sets.push('name = ?'); values.push(data.name); }
   if (data.type !== undefined) { sets.push('type = ?'); values.push(data.type); }
   if (data.base_url !== undefined) { sets.push('base_url = ?'); values.push(data.base_url); }
   if (data.api_key !== undefined) { sets.push('api_key = ?'); values.push(data.api_key ? encrypt(data.api_key) : ''); }
+  if (data.api_format !== undefined) { sets.push('api_format = ?'); values.push(data.api_format); }
   if (data.enabled !== undefined) { sets.push('enabled = ?'); values.push(data.enabled); }
   if (data.sort_order !== undefined) { sets.push('sort_order = ?'); values.push(data.sort_order); }
   if (sets.length === 0) return;

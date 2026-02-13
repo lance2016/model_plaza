@@ -72,6 +72,27 @@ export function MessageList({
               </div>
             )}
             <div className={`${message.role === 'user' ? 'max-w-[65%]' : 'flex-1 max-w-[85%]'}`}>
+              {/* Images — rendered above the text bubble */}
+              {(() => {
+                const imageFiles = (message.parts?.filter(p => p.type === 'file') || [])
+                  .map(p => p as unknown as { type: 'file'; url?: string; mediaType?: string })
+                  .filter(p => p.mediaType?.startsWith('image/') && p.url);
+                if (imageFiles.length === 0) return null;
+                return (
+                  <div className={`flex flex-wrap gap-1.5 mb-1.5 ${message.role === 'user' ? 'justify-end' : ''}`}>
+                    {imageFiles.map((file, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={i}
+                        src={file.url}
+                        alt={`图片 ${i + 1}`}
+                        className="rounded-lg object-cover border border-border/30 shadow-sm max-h-48 max-w-[200px]"
+                      />
+                    ))}
+                  </div>
+                );
+              })()}
+              {/* Text bubble */}
               <div className={`shadow-sm ${
                 message.role === 'user'
                   ? 'bg-primary text-primary-foreground px-3.5 py-1.5 rounded-lg inline-block'

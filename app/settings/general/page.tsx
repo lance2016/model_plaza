@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
@@ -31,6 +33,8 @@ export default function GeneralSettingsPage() {
   const { data: models } = useSWR<Model[]>('/api/models?enabled=true', fetcher);
   const { data: settings } = useSWR<Record<string, string>>('/api/settings', fetcher);
   const [defaultModelId, setDefaultModelId] = useState<string>('');
+  const [globalPromptEnabled, setGlobalPromptEnabled] = useState(false);
+  const [globalPrompt, setGlobalPrompt] = useState('');
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isClearing, setIsClearing] = useState(false);
@@ -38,6 +42,12 @@ export default function GeneralSettingsPage() {
   useEffect(() => {
     if (settings?.default_model_id) {
       setDefaultModelId(settings.default_model_id);
+    }
+    if (settings?.global_system_prompt_enabled !== undefined) {
+      setGlobalPromptEnabled(settings.global_system_prompt_enabled === 'true');
+    }
+    if (settings?.global_system_prompt !== undefined) {
+      setGlobalPrompt(settings.global_system_prompt);
     }
   }, [settings]);
 
@@ -56,6 +66,30 @@ export default function GeneralSettingsPage() {
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error('Failed to save default model:', error);
+      setMessage({ type: 'error', text: '保存失败' });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const handleSaveGlobalPrompt = async () => {
+    try {
+      await Promise.all([
+        fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'global_system_prompt_enabled', value: String(globalPromptEnabled) }),
+        }),
+        fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'global_system_prompt', value: globalPrompt }),
+        }),
+      ]);
+      mutate('/api/settings');
+      setMessage({ type: 'success', text: '全局提示词已保存' });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Failed to save global prompt:', error);
       setMessage({ type: 'error', text: '保存失败' });
       setTimeout(() => setMessage(null), 3000);
     }
@@ -120,6 +154,43 @@ export default function GeneralSettingsPage() {
             </Select>
           </div>
           <Button onClick={handleSaveDefaultModel} disabled={!defaultModelId}>
+            保存
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold tracking-tight">全局系统提示词</CardTitle>
+              <CardDescription className="text-muted-foreground/70">
+                注入到所有对话中的系统提示词，优先级高于对话级提示词
+              </CardDescription>
+            </div>
+            <Switch
+              checked={globalPromptEnabled}
+              onCheckedChange={setGlobalPromptEnabled}
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="global-prompt">提示词内容</Label>
+            <Textarea
+              id="global-prompt"
+              placeholder="例如：请始终使用中文回答，保持简洁明了的风格..."
+              value={globalPrompt}
+              onChange={(e) => setGlobalPrompt(e.target.value)}
+              rows={5}
+              disabled={!globalPromptEnabled}
+              className="resize-none border-border/50 bg-card/50 focus:border-primary/30 disabled:opacity-50"
+            />
+            <p className="text-xs text-muted-foreground/60 leading-relaxed">
+              启用后，此提示词会自动注入到每次对话中。如果对话本身也配置了系统提示词，两者会合并，且全局提示词具有最高优先级。
+            </p>
+          </div>
+          <Button onClick={handleSaveGlobalPrompt}>
             保存
           </Button>
         </CardContent>

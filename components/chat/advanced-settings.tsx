@@ -13,7 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Settings } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 
 export interface ChatConfig {
   systemPrompt: string;
@@ -44,15 +44,15 @@ export function AdvancedSettings({ config, onChange, disabled }: AdvancedSetting
           variant="ghost"
           size="icon"
           disabled={disabled}
-          title="高级设置"
+          title="对话参数"
           className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors duration-200"
         >
-          <Settings className="h-4 w-4" />
+          <SlidersHorizontal className="h-4 w-4" />
         </Button>
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto border-l border-border/50 bg-background/95 backdrop-blur-md">
         <SheetHeader>
-          <SheetTitle>高级设置</SheetTitle>
+          <SheetTitle>对话参数</SheetTitle>
           <SheetDescription className="text-muted-foreground/70">
             自定义对话参数以获得更好的效果
           </SheetDescription>

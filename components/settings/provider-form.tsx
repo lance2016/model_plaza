@@ -14,6 +14,7 @@ interface ProviderFormData {
   type: string;
   base_url: string;
   api_key: string;
+  api_format: string;
   enabled: number;
 }
 
@@ -24,6 +25,7 @@ function makeInitForm(data?: Partial<ProviderFormData>): ProviderFormData {
     type: data?.type || 'openai_compatible',
     base_url: data?.base_url || '',
     api_key: '',
+    api_format: data?.api_format || 'completion',
     enabled: data?.enabled ?? 1,
   };
 }
@@ -139,6 +141,23 @@ export function ProviderForm({
               大多数国内厂商（DeepSeek、通义千问、豆包等）兼容 OpenAI 接口
             </p>
           </div>
+          {form.type === 'openai_compatible' && (
+            <div className="space-y-2">
+              <Label htmlFor="api_format">API 格式</Label>
+              <Select value={form.api_format} onValueChange={v => setForm(f => ({ ...f, api_format: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="completion">Chat Completions（默认）</SelectItem>
+                  <SelectItem value="responses">Responses</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                默认使用 Chat Completions 格式，部分厂商支持 Responses 格式
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="base_url">Base URL</Label>
             <Input

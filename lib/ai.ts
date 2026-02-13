@@ -69,7 +69,18 @@ const createLoggingFetch = (providerId: string, reasoningEffort?: string) => {
       try {
         const bodyString = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
         const bodyJson = JSON.parse(bodyString);
-        console.log('Request Body:', JSON.stringify(bodyJson, null, 2));
+        // Truncate base64 image data in logs
+        const safeBody = JSON.stringify(bodyJson, (key, value) => {
+          if (typeof value === 'string' && value.startsWith('data:image/')) {
+            return value.substring(0, 50) + '...[truncated]';
+          }
+          // Also handle OpenAI image_url format
+          if (key === 'url' && typeof value === 'string' && value.length > 200 && value.includes('base64')) {
+            return value.substring(0, 50) + '...[truncated]';
+          }
+          return value;
+        }, 2);
+        console.log('Request Body:', safeBody);
       } catch {
         console.log('Request Body (raw):', init.body);
       }
@@ -124,8 +135,8 @@ export function createAIProvider(provider: Provider, reasoningEffort?: string) {
 
   switch (provider.type) {
     case 'openai_compatible':
-      // Use official OpenAI SDK for OpenAI, compatible SDK for others
-      if (provider.id === 'openai') {
+      // Use official OpenAI SDK for: OpenAI itself, or any provider using responses format
+      if (provider.id === 'openai' || provider.api_format === 'responses') {
         return createOpenAI({
           baseURL: provider.base_url,
           apiKey: provider.api_key,
@@ -157,12 +168,18 @@ export function createAIProvider(provider: Provider, reasoningEffort?: string) {
 
 export function getLanguageModel(provider: Provider, modelId: string, reasoningEffort?: string) {
   const aiProvider = createAIProvider(provider, reasoningEffort);
-  
-  console.log('Creating language model:', { providerId: provider.id, modelId, reasoningEffort });
-  
-  // For openai-compatible providers (except OpenAI itself), use chatModel method
-  if (provider.type === 'openai_compatible' && provider.id !== 'openai') {
-    return (aiProvider as { chatModel: (id: string) => unknown }).chatModel(modelId);
+
+  console.log('Creating language model:', { providerId: provider.id, modelId, reasoningEffort, apiFormat: provider.api_format });
+
+  // Use responses() method when provider is configured for responses format
+  if (provider.api_format === 'responses') {
+    return (aiProvider as { responses: (id: string) => unknown }).responses(modelId);
+  }
+
+  // For all openai_compatible providers (including OpenAI), explicitly use .chat() for completions
+  // The default callable of createOpenAI now uses Responses API, so we must use .chat() explicitly
+  if (provider.type === 'openai_compatible') {
+    return (aiProvider as { chat: (id: string) => unknown }).chat(modelId);
   }
 
   return (aiProvider as (id: string) => unknown)(modelId);

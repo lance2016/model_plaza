@@ -44,17 +44,18 @@ export function ModelSelector({
           variant="ghost"
           role="combobox"
           aria-expanded={open}
-          className="w-[280px] justify-between h-8 px-3 text-sm bg-accent/50 hover:bg-accent border border-border/50 transition-all duration-200"
+          className="justify-between h-8 px-2.5 text-sm hover:bg-accent/50 transition-all duration-200"
         >
           {selectedModel ? (
-            <span className="truncate">
-              <span className="text-muted-foreground/70 text-xs mr-1.5">{selectedModel.provider_name}</span>
-              <span className="font-medium">{selectedModel.name}</span>
+            <span className="flex items-center gap-1.5 truncate">
+              <span className="text-muted-foreground text-xs">{selectedModel.provider_name}</span>
+              <span className="text-muted-foreground/30">|</span>
+              <span className="font-medium text-[13px]">{selectedModel.name}</span>
             </span>
           ) : (
             <span className="text-muted-foreground">选择模型...</span>
           )}
-          <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+          <ChevronDown className="ml-1.5 h-3 w-3 shrink-0 text-muted-foreground/40" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[280px] p-0 border-border/50 bg-popover/95 backdrop-blur-md shadow-xl">

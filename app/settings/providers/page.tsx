@@ -17,6 +17,7 @@ interface ProviderItem {
   type: string;
   base_url: string;
   api_key: string;
+  api_format: string;
   has_api_key: boolean;
   enabled: number;
   sort_order: number;
@@ -32,7 +33,7 @@ export default function ProvidersPage() {
 
   const handleToggle = async (id: string, enabled: boolean) => {
     try {
-      await fetch(`/api/providers/${id}`, {
+      await fetch(`/api/providers/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: enabled ? 1 : 0 }),
@@ -47,7 +48,7 @@ export default function ProvidersPage() {
   const handleDelete = async (id: string) => {
     if (!confirm(`确定删除 Provider "${id}"？相关模型也会被删除。`)) return;
     try {
-      await fetch(`/api/providers/${id}`, { method: 'DELETE' });
+      await fetch(`/api/providers/${encodeURIComponent(id)}`, { method: 'DELETE' });
       mutate();
       toast({ title: 'Provider 已删除' });
     } catch {
@@ -101,6 +102,9 @@ export default function ProvidersPage() {
               <div className="flex items-center gap-3">
                 <CardTitle className="text-lg">{provider.name}</CardTitle>
                 <Badge variant="secondary">{typeLabel[provider.type] || provider.type}</Badge>
+                {provider.api_format === 'responses' && (
+                  <Badge variant="outline" className="text-xs">Responses</Badge>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Switch

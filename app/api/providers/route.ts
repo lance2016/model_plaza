@@ -24,14 +24,14 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { id, name, type, base_url, api_key, enabled, sort_order } = body;
+    const { id, name, type, base_url, api_key, api_format, enabled, sort_order } = body;
     if (!id || !name || !type || !base_url) {
       return NextResponse.json({ error: 'Missing required fields: id, name, type, base_url' }, { status: 400 });
     }
     if (!['openai_compatible', 'anthropic', 'google'].includes(type)) {
       return NextResponse.json({ error: 'Invalid type. Must be: openai_compatible, anthropic, or google' }, { status: 400 });
     }
-    createProvider({ id, name, type, base_url, api_key, enabled, sort_order });
+    createProvider({ id, name, type, base_url, api_key, api_format, enabled, sort_order });
     return NextResponse.json({ success: true, id });
   } catch (error: unknown) {
     console.error('POST /api/providers error:', error);

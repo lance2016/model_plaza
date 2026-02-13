@@ -10,6 +10,7 @@ import {
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -38,78 +39,82 @@ export function ReasoningEffortSelector({
 
   if (reasoningType === 'binary') {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-7 w-7 transition-colors duration-200",
-              isActive
-                ? "text-primary hover:text-primary/80"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            disabled={disabled}
-            onClick={() => onChange(value === 'enabled' ? 'disabled' : 'enabled')}
-          >
-            <Brain className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>思考 · {isActive ? '已开启' : '已关闭'}</p>
-        </TooltipContent>
-      </Tooltip>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-7 w-7 transition-colors duration-200",
+                isActive
+                  ? "text-primary hover:text-primary/80"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              disabled={disabled}
+              onClick={() => onChange(value === 'enabled' ? 'disabled' : 'enabled')}
+            >
+              <Brain className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>思考 · {isActive ? '已开启' : '已关闭'}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
   const currentLevel = levelOptions.find(o => o.value === value);
 
   return (
-    <Popover>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              className={cn(
-                "h-7 gap-1 px-1.5 transition-colors duration-200",
-                isActive
-                  ? "text-primary hover:text-primary/80"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-              disabled={disabled}
-            >
-              <Brain className="h-3.5 w-3.5" />
-              <span className="text-[11px]">{currentLevel?.label}</span>
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>思考深度</p>
-        </TooltipContent>
-      </Tooltip>
-      <PopoverContent
-        className="w-auto p-1 border-border/50 bg-popover/95 backdrop-blur-md"
-        align="start"
-        sideOffset={8}
-      >
-        <div className="flex gap-0.5">
-          {levelOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => onChange(option.value)}
-              className={cn(
-                "px-2.5 py-1 rounded-md text-xs transition-all duration-150",
-                value === option.value
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
+    <TooltipProvider>
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "h-7 gap-1 px-1.5 transition-colors duration-200",
+                  isActive
+                    ? "text-primary hover:text-primary/80"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                disabled={disabled}
+              >
+                <Brain className="h-3.5 w-3.5" />
+                <span className="text-[11px]">{currentLevel?.label}</span>
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>思考深度</p>
+          </TooltipContent>
+        </Tooltip>
+        <PopoverContent
+          className="w-auto p-1 border-border/50 bg-popover/95 backdrop-blur-md"
+          align="start"
+          sideOffset={8}
+        >
+          <div className="flex gap-0.5">
+            {levelOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => onChange(option.value)}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-xs transition-all duration-150",
+                  value === option.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </TooltipProvider>
   );
 }

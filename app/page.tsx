@@ -172,7 +172,7 @@ export default function ChatPage() {
 
     // Load from DB and create new session
     try {
-      const res = await fetch(`/api/conversations/${convId}`);
+      const res = await fetch(`/api/conversations/${encodeURIComponent(convId)}`);
       if (res.ok) {
         const conv = await res.json();
         const id = createSessionId();

@@ -1,42 +1,87 @@
 import { streamText, type UIMessage } from 'ai';
 
-type CoreMessage = { role: 'user' | 'assistant' | 'system'; content: string };
-import { getModel, getProvider } from '@/lib/db';
+type ContentPart = { type: 'text'; text: string } | { type: 'image'; image: string; mimeType?: string };
+type CoreMessage = {
+  role: 'user' | 'assistant' | 'system';
+  content: string | ContentPart[];
+};
+
+import { getModel, getProvider, getSetting } from '@/lib/db';
 import { getLanguageModel } from '@/lib/ai';
 
 export const maxDuration = 60;
 
-// Convert UIMessage to CoreMessage format
+// Convert UIMessage to CoreMessage format, extracting file parts as images
 function convertUIMessagesToCoreMessages(uiMessages: UIMessage[]): CoreMessage[] {
   return uiMessages.map((msg) => {
-    if (msg.role === 'user' || msg.role === 'assistant') {
-      // Collect all text parts
-      const textParts = msg.parts?.filter(p => p.type === 'text').map(p => p.text) || [];
-      const content = textParts.join('\n');
-      
-      return {
-        role: msg.role,
-        content,
-      };
+    if (msg.role !== 'user' && msg.role !== 'assistant') {
+      return { role: msg.role, content: '' } as CoreMessage;
     }
-    
-    // Fallback for other roles
-    return {
-      role: msg.role,
-      content: '',
-    } as CoreMessage;
+
+    const textParts = msg.parts?.filter(p => p.type === 'text').map(p => p.text) || [];
+    const text = textParts.join('\n');
+
+    // Collect image file parts
+    const fileParts = (msg.parts?.filter(p => p.type === 'file') || []) as Array<{
+      type: 'file';
+      url?: string;
+      data?: string;
+      mimeType?: string;
+      mediaType?: string;
+    }>;
+    const imageParts = fileParts.filter(p => {
+      const mime = p.mimeType || p.mediaType || '';
+      return mime.startsWith('image/');
+    });
+
+    if (imageParts.length > 0) {
+      const contentParts: ContentPart[] = [];
+      if (text) {
+        contentParts.push({ type: 'text', text });
+      }
+      imageParts.forEach(img => {
+        const imageUrl = img.url || img.data || '';
+        if (imageUrl) {
+          contentParts.push({
+            type: 'image',
+            image: imageUrl,
+            mimeType: img.mimeType || img.mediaType,
+          });
+        }
+      });
+      return { role: msg.role, content: contentParts };
+    }
+
+    return { role: msg.role, content: text };
   });
+}
+
+// Log message with image placeholders (avoid printing full base64)
+function logMessageSafely(msg: CoreMessage) {
+  if (typeof msg.content === 'string') {
+    return { role: msg.role, content: msg.content };
+  }
+
+  const safeContent = msg.content.map(part => {
+    if (part.type === 'image') {
+      const prefix = part.image.substring(0, 50);
+      return { type: 'image', preview: `${prefix}...`, mimeType: part.mimeType };
+    }
+    return part;
+  });
+
+  return { role: msg.role, content: safeContent };
 }
 
 export async function POST(req: Request) {
   try {
-    const { 
-      messages, 
-      modelId, 
+    const {
+      messages,
+      modelId,
       reasoningEffort,
       chatConfig,
-    }: { 
-      messages: UIMessage[]; 
+    }: {
+      messages: UIMessage[];
       modelId: string;
       reasoningEffort?: string;
       chatConfig?: {
@@ -85,17 +130,30 @@ export async function POST(req: Request) {
       );
     }
 
-    const languageModel = getLanguageModel(provider, model.id, reasoningEffort);
+    const languageModel = getLanguageModel(provider, model.id, model.is_reasoning_model ? reasoningEffort : undefined);
 
-    // Convert UIMessage[] to CoreMessage[] format
+    // Convert UIMessage[] to CoreMessage[] (images extracted from file parts)
     const coreMessages = convertUIMessagesToCoreMessages(messages);
 
-    // Inject system prompt if provided
+    // Log messages safely (with image placeholders)
+    console.log('Core messages:', coreMessages.map(logMessageSafely));
+
+    // Build system prompt: merge global prompt + per-chat prompt
+    const globalPromptEnabled = getSetting('global_system_prompt_enabled') === 'true';
+    const globalPrompt = globalPromptEnabled ? (getSetting('global_system_prompt') || '') : '';
+    const chatPrompt = chatConfig?.systemPrompt || '';
+
     const finalMessages: CoreMessage[] = [];
-    if (chatConfig?.systemPrompt) {
+    if (globalPrompt || chatPrompt) {
+      let systemContent = '';
+      if (globalPrompt && chatPrompt) {
+        systemContent = `${chatPrompt}\n\n---\n以下是用户自定义的全局提示词，优先级最高，如与上述内容冲突请以此为准：\n${globalPrompt}`;
+      } else {
+        systemContent = globalPrompt || chatPrompt;
+      }
       finalMessages.push({
         role: 'system',
-        content: chatConfig.systemPrompt,
+        content: systemContent,
       });
     }
     finalMessages.push(...coreMessages);
@@ -121,12 +179,10 @@ export async function POST(req: Request) {
     };
 
     // Add reasoning effort if model supports it
-    // Use experimental_providerMetadata to pass custom parameters
     if (model.is_reasoning_model && reasoningEffort) {
       console.log('Adding reasoning effort via providerMetadata:', reasoningEffort);
       streamOptions.experimental_providerMetadata = {
         reasoning_effort: reasoningEffort,
-        // Also try the camelCase version
         reasoningEffort: reasoningEffort,
       };
     }
@@ -134,12 +190,9 @@ export async function POST(req: Request) {
     console.log('Stream options (without model object):', {
       messages: finalMessages.length + ' messages',
       hasSystemPrompt: !!chatConfig?.systemPrompt,
+      hasGlobalPrompt: !!globalPrompt,
       temperature: streamOptions.temperature,
       maxTokens: streamOptions.maxTokens,
-      topP: streamOptions.topP,
-      frequencyPenalty: streamOptions.frequencyPenalty,
-      presencePenalty: streamOptions.presencePenalty,
-      experimental_providerMetadata: streamOptions.experimental_providerMetadata,
     });
 
     const result = streamText(streamOptions as never);

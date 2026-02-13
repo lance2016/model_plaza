@@ -6,7 +6,7 @@ import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
 import { mutate as globalMutate } from 'swr';
 import { MessageList } from '@/components/chat/message-list';
-import { ChatPanel } from '@/components/chat/chat-panel';
+import { ChatPanel, type ImageAttachment } from '@/components/chat/chat-panel';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { ChatConfig } from '@/components/chat/advanced-settings';
@@ -44,6 +44,7 @@ export function ChatSession({
   onReasoningEffortChange,
 }: ChatSessionProps) {
   const [input, setInput] = useState('');
+  const [images, setImages] = useState<ImageAttachment[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
 
   // Refs for latest values to avoid stale closures
@@ -75,7 +76,7 @@ export function ChatSession({
       const convId = conversationIdRef.current;
       if (!convId) return;
       try {
-        await fetch(`/api/conversations/${convId}`, {
+        await fetch(`/api/conversations/${encodeURIComponent(convId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -111,11 +112,13 @@ export function ChatSession({
   }, [messages, sendMessage]);
 
   const handleSubmit = useCallback(async () => {
-    if (!input.trim() || !selectedModelIdRef.current) return;
+    if ((!input.trim() && images.length === 0) || !selectedModelIdRef.current) return;
     if (status === 'submitted' || status === 'streaming') return;
 
     const text = input;
+    const imagesCopy = [...images];
     setInput('');
+    setImages([]); // Clear images after submit
 
     if (!conversationIdRef.current) {
       try {
@@ -124,7 +127,7 @@ export function ChatSession({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model_id: selectedModelIdRef.current,
-            title: text.slice(0, 50),
+            title: text.slice(0, 50) || '图片对话',
           }),
         });
         if (res.ok) {
@@ -139,8 +142,20 @@ export function ChatSession({
       }
     }
 
-    sendMessage({ text });
-  }, [input, status, sendMessage, sessionId]);
+    // Send message with files
+    if (imagesCopy.length > 0) {
+      sendMessage({
+        text,
+        files: imagesCopy.map(img => ({
+          type: 'file' as const,
+          url: img.url,
+          mediaType: img.mimeType,
+        })),
+      });
+    } else {
+      sendMessage({ text });
+    }
+  }, [input, images, status, sendMessage, sessionId]);
 
   return (
     <div className={isActive ? 'flex-1 flex flex-col overflow-hidden' : 'hidden'}>
@@ -167,6 +182,8 @@ export function ChatSession({
         reasoningEffort={reasoningEffort}
         reasoningType={reasoningType}
         onReasoningEffortChange={onReasoningEffortChange}
+        images={images}
+        onImagesChange={setImages}
       />
     </div>
   );
