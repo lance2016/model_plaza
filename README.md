@@ -123,29 +123,78 @@
 ```bash
 git clone https://github.com/yourusername/llm-plaza.git
 cd llm-plaza
-npm install
+pnpm install  # 或使用 npm install
 ```
+
+#### ⚠️ Mac 用户特别注意（首次安装）
+
+如果使用 **pnpm** 安装，由于 `better-sqlite3` 需要编译原生模块，可能会遇到模块加载错误。请按以下步骤操作：
+
+**方法一：启用构建脚本（推荐）**
+
+1. 创建 `.npmrc` 文件：
+```bash
+echo "enable-pre-post-scripts=true" > .npmrc
+```
+
+2. 重新安装依赖：
+```bash
+pnpm install
+```
+
+**方法二：手动编译（如果方法一不生效）**
+
+```bash
+# 编译 better-sqlite3 原生模块
+cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3
+npm run build-release
+cd ../../../../..
+```
+
+**使用 npm 的用户**无需额外操作，npm 会自动运行构建脚本。
 
 ### 配置
 
-1. 复制环境变量：
+1. 复制环境变量（可选）：
 ```bash
 cp .env.example .env.local
 ```
 
-2. 编辑 `.env.local` 配置 API Key，或在应用设置页面中配置。
+2. 编辑 `.env.local` 配置加密密钥（可选），或使用默认值。
 
 ### 运行
 
 ```bash
 # 开发模式
-npm run dev
+pnpm run dev  # 或 npm run dev
 
 # 生产构建
-npm run build && npm start
+pnpm run build && pnpm start
 ```
 
 打开 [http://localhost:3000](http://localhost:3000) 开始使用。
+
+### 首次启动
+
+首次启动时，应用会自动：
+- 创建 SQLite 数据库文件（`data/llm-plaza.db`）
+- 初始化 8 个预置提供商（OpenAI、Anthropic、Google 等）
+- 加载 11 个常用模型
+
+**下一步**：在应用的设置页面（右上角齿轮图标）中为您想使用的提供商配置 API Key。
+
+### 常见问题
+
+#### Q: 启动时报错 "Could not locate the bindings file"？
+A: 这是 `better-sqlite3` 原生模块未编译的问题，请参考上面的"Mac 用户特别注意"部分解决。
+
+#### Q: 如何重置数据库？
+A: 运行 `pnpm run db:reset` 将删除所有数据并重新初始化。
+
+#### Q: API Key 存储在哪里？
+A: API Key 使用 AES-256-GCM 加密后存储在本地 SQLite 数据库中，不会上传到任何服务器。
+
+更多详细说明请查看 [SETUP.md](./SETUP.md)。
 
 ## 技术栈
 
