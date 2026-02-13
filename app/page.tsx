@@ -1,20 +1,19 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import useSWR, { mutate as globalMutate } from 'swr';
-import { MessageList } from '@/components/chat/message-list';
-import { ChatPanel } from '@/components/chat/chat-panel';
+import useSWR from 'swr';
+import { ChatSession } from '@/components/chat/chat-session';
 import { ModelSelector } from '@/components/chat/model-selector';
 import { ReasoningEffortSelector } from '@/components/chat/reasoning-effort-selector';
 import { AdvancedSettings, type ChatConfig } from '@/components/chat/advanced-settings';
 import { Sidebar } from '@/components/sidebar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Menu } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import type { Session } from '@/lib/types';
+import { DEFAULT_CHAT_CONFIG } from '@/lib/types';
+import type { UIMessage } from 'ai';
 
 interface Model {
   id: string;
@@ -26,161 +25,204 @@ interface Model {
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
+let nextSessionId = 1;
+function createSessionId() {
+  return `session-${nextSessionId++}-${Date.now()}`;
+}
+
 export default function ChatPage() {
-  const [selectedModelId, setSelectedModelId] = useState<string>('');
-  const [conversationId, setConversationId] = useState<string | undefined>();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [input, setInput] = useState('');
-  const [reasoningEffort, setReasoningEffort] = useState<string>('medium');
-  const [chatConfig, setChatConfig] = useState<ChatConfig>({
-    systemPrompt: '',
-    temperature: 0.7,
-    maxTokens: 4096,
-    topP: 1.0,
-    frequencyPenalty: 0,
-    presencePenalty: 0,
-  });
-  
+  const [defaultModelId, setDefaultModelId] = useState<string>('');
+
   const { data: models = [] } = useSWR<Model[]>('/api/models', fetcher);
-  const currentModel = models.find(m => m.id === selectedModelId);
+
+  // Refs for stable callbacks
+  const sessionsRef = useRef(sessions);
+  const activeSessionIdRef = useRef(activeSessionId);
+  const streamingSessionIdsRef = useRef(streamingSessionIds);
+  const defaultModelIdRef = useRef(defaultModelId);
+  const modelsRef = useRef(models);
+  sessionsRef.current = sessions;
+  activeSessionIdRef.current = activeSessionId;
+  streamingSessionIdsRef.current = streamingSessionIds;
+  defaultModelIdRef.current = defaultModelId;
+  modelsRef.current = models;
+
+  const activeSession = sessions.find(s => s.id === activeSessionId);
+  const currentModel = models.find(m => m.id === activeSession?.selectedModelId);
   const isReasoningModel = currentModel?.is_reasoning_model === 1;
 
-  // Load default model from settings
+  // Load default model and create initial session
   useEffect(() => {
-    const loadDefaultModel = async () => {
+    const init = async () => {
+      let modelId = '';
       try {
         const res = await fetch('/api/settings');
         if (res.ok) {
           const settings = await res.json();
           if (settings.default_model_id) {
-            setSelectedModelId(settings.default_model_id);
+            modelId = settings.default_model_id;
           }
         }
       } catch (error) {
         console.error('Failed to load default model:', error);
       }
+      setDefaultModelId(modelId);
+      const id = createSessionId();
+      setSessions([{
+        id,
+        selectedModelId: modelId,
+        reasoningEffort: 'medium',
+        chatConfig: { ...DEFAULT_CHAT_CONFIG },
+      }]);
+      setActiveSessionId(id);
     };
-    
-    if (!selectedModelId) {
-      loadDefaultModel();
-    }
-  }, [selectedModelId]);
+    init();
+  }, []);
 
-  // Update reasoning effort when model changes
+  // Update reasoning effort when model changes for active session
   useEffect(() => {
     if (currentModel && currentModel.is_reasoning_model === 1) {
-      setReasoningEffort(currentModel.default_reasoning_effort || 'medium');
+      const id = activeSessionIdRef.current;
+      setSessions(prev => {
+        const session = prev.find(s => s.id === id);
+        if (!session) return prev;
+        return prev.map(s =>
+          s.id === id
+            ? { ...s, reasoningEffort: currentModel.default_reasoning_effort || 'medium' }
+            : s
+        );
+      });
     }
   }, [currentModel]);
 
-  // Use ref so the transport body closure always reads the latest values
-  const selectedModelIdRef = useRef(selectedModelId);
-  const reasoningEffortRef = useRef(reasoningEffort);
-  const chatConfigRef = useRef(chatConfig);
-  selectedModelIdRef.current = selectedModelId;
-  reasoningEffortRef.current = reasoningEffort;
-  chatConfigRef.current = chatConfig;
+  // Cleanup: remove sessions that are not active and not streaming
+  useEffect(() => {
+    setSessions(prev => {
+      const filtered = prev.filter(s =>
+        s.id === activeSessionIdRef.current || streamingSessionIdsRef.current.has(s.id)
+      );
+      // Always keep at least the active session
+      return filtered.length > 0 ? filtered : prev;
+    });
+  }, [activeSessionId, streamingSessionIds]);
 
-  const [transport] = useState(() => new DefaultChatTransport({
-    api: '/api/chat',
-    body: () => ({ 
-      modelId: selectedModelIdRef.current,
-      reasoningEffort: reasoningEffortRef.current,
-      chatConfig: chatConfigRef.current,
-    }),
-  }));
+  // --- Session property updaters ---
 
-  const { messages, sendMessage, status, stop, error, setMessages } = useChat({
-    transport,
-    onFinish: async (message) => {
-      if (!conversationId) return;
-      try {
-        await fetch(`/api/conversations/${conversationId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: JSON.stringify([...messages, message]),
-            model_id: selectedModelId,
-          }),
-        });
-        // Refresh conversation list to update timestamp
-        globalMutate('/api/conversations');
-      } catch (e) {
-        console.error('Failed to save conversation:', e);
-      }
-    },
-  });
+  const updateActiveSession = useCallback((updates: Partial<Session>) => {
+    setSessions(prev => prev.map(s =>
+      s.id === activeSessionIdRef.current ? { ...s, ...updates } : s
+    ));
+  }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!input.trim() || !selectedModelId) return;
-    const text = input;
-    setInput('');
+  const handleModelChange = useCallback((modelId: string) => {
+    updateActiveSession({ selectedModelId: modelId });
+    // Reasoning effort will be updated by the useEffect above
+  }, [updateActiveSession]);
 
-    if (!conversationId) {
-      try {
-        const res = await fetch('/api/conversations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model_id: selectedModelId,
-            title: text.slice(0, 50),
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setConversationId(data.id);
-          // Refresh conversation list immediately after creating
-          globalMutate('/api/conversations');
-        }
-      } catch (e) {
-        console.error('Failed to create conversation:', e);
-      }
-    }
+  const handleReasoningEffortChange = useCallback((effort: string) => {
+    updateActiveSession({ reasoningEffort: effort });
+  }, [updateActiveSession]);
 
-    sendMessage({ text });
-  }, [input, selectedModelId, conversationId, sendMessage]);
+  const handleChatConfigChange = useCallback((config: ChatConfig) => {
+    updateActiveSession({ chatConfig: config });
+  }, [updateActiveSession]);
+
+  // --- Session lifecycle handlers ---
 
   const handleNewChat = useCallback(() => {
-    setMessages([]);
-    setConversationId(undefined);
-    setInput('');
+    const currentModel = sessionsRef.current.find(s => s.id === activeSessionIdRef.current);
+    const modelId = currentModel?.selectedModelId || defaultModelIdRef.current;
+    const id = createSessionId();
+    setSessions(prev => [...prev, {
+      id,
+      selectedModelId: modelId,
+      reasoningEffort: 'medium',
+      chatConfig: { ...DEFAULT_CHAT_CONFIG },
+    }]);
+    setActiveSessionId(id);
     setSidebarOpen(false);
-    // Reset chat config to defaults
-    setChatConfig({
-      systemPrompt: '',
-      temperature: 0.7,
-      maxTokens: 4096,
-      topP: 1.0,
-      frequencyPenalty: 0,
-      presencePenalty: 0,
-    });
-  }, [setMessages]);
+  }, []);
 
-  const handleSelectConversation = useCallback(async (id: string) => {
+  const handleSelectConversation = useCallback(async (convId: string) => {
+    // Check if already mounted
+    const existing = sessionsRef.current.find(s => s.conversationId === convId);
+    if (existing) {
+      setActiveSessionId(existing.id);
+      setSidebarOpen(false);
+      return;
+    }
+
+    // Load from DB and create new session
     try {
-      const res = await fetch(`/api/conversations/${id}`);
+      const res = await fetch(`/api/conversations/${convId}`);
       if (res.ok) {
         const conv = await res.json();
-        setConversationId(id);
-        setMessages(JSON.parse(conv.messages));
-        if (conv.model_id) {
-          setSelectedModelId(conv.model_id);
-        }
+        const id = createSessionId();
+        const parsedMessages: UIMessage[] = JSON.parse(conv.messages);
+        const modelId = conv.model_id || defaultModelIdRef.current;
+
+        // Find model info for reasoning effort
+        const model = modelsRef.current.find(m => m.id === modelId);
+        const effort = model?.is_reasoning_model === 1
+          ? (model.default_reasoning_effort || 'medium')
+          : 'medium';
+
+        setSessions(prev => [...prev, {
+          id,
+          conversationId: convId,
+          selectedModelId: modelId,
+          reasoningEffort: effort,
+          chatConfig: { ...DEFAULT_CHAT_CONFIG },
+          initialMessages: parsedMessages,
+        }]);
+        setActiveSessionId(id);
       }
     } catch (e) {
       console.error('Failed to load conversation:', e);
     }
     setSidebarOpen(false);
-  }, [setMessages]);
+  }, []);
+
+  const handleConversationCreated = useCallback((sessionId: string, convId: string) => {
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId ? { ...s, conversationId: convId } : s
+    ));
+  }, []);
+
+  const handleStatusChange = useCallback((sessionId: string, status: string) => {
+    setStreamingSessionIds(prev => {
+      const next = new Set(prev);
+      if (status === 'streaming' || status === 'submitted') {
+        next.add(sessionId);
+      } else {
+        next.delete(sessionId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Compute streaming conversation IDs for sidebar
+  const streamingConversationIds = sessions
+    .filter(s => streamingSessionIds.has(s.id) && s.conversationId)
+    .map(s => s.conversationId!);
+
+  if (!activeSessionId) {
+    return null; // Still initializing
+  }
 
   return (
     <div className="flex h-screen">
       {/* Desktop sidebar */}
       <aside className="w-64 border-r border-border/50 glass flex-shrink-0 hidden md:flex flex-col">
         <Sidebar
-          currentConversationId={conversationId}
+          currentConversationId={activeSession?.conversationId}
           onNewChat={handleNewChat}
           onSelectConversation={handleSelectConversation}
+          streamingConversationIds={streamingConversationIds}
         />
       </aside>
 
@@ -196,50 +238,52 @@ export default function ChatPage() {
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0 glass border-r border-border/50">
               <Sidebar
-                currentConversationId={conversationId}
+                currentConversationId={activeSession?.conversationId}
                 onNewChat={handleNewChat}
                 onSelectConversation={handleSelectConversation}
+                streamingConversationIds={streamingConversationIds}
               />
             </SheetContent>
           </Sheet>
-          <ModelSelector value={selectedModelId} onChange={setSelectedModelId} />
+          <ModelSelector
+            value={activeSession?.selectedModelId || ''}
+            onChange={handleModelChange}
+          />
           {isReasoningModel && (
-            <ReasoningEffortSelector 
-              value={reasoningEffort} 
-              onChange={setReasoningEffort}
-              disabled={!selectedModelId}
+            <ReasoningEffortSelector
+              value={activeSession?.reasoningEffort || 'medium'}
+              onChange={handleReasoningEffortChange}
+              disabled={!activeSession?.selectedModelId}
               reasoningType={currentModel?.reasoning_type}
             />
           )}
           <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />
             <AdvancedSettings
-              config={chatConfig}
-              onChange={setChatConfig}
-              disabled={!selectedModelId}
+              config={activeSession?.chatConfig || DEFAULT_CHAT_CONFIG}
+              onChange={handleChatConfigChange}
+              disabled={!activeSession?.selectedModelId}
             />
           </div>
         </header>
 
-        {error && (
-          <Alert variant="destructive" className="m-4 mb-0 border-destructive/50 bg-destructive/10">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error.message}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="flex-1 overflow-hidden">
-          <MessageList messages={messages} status={status} />
+        {/* Chat sessions - all mounted, only active visible */}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {sessions.map(session => (
+            <ChatSession
+              key={session.id}
+              sessionId={session.id}
+              initialConversationId={session.conversationId}
+              initialMessages={session.initialMessages}
+              selectedModelId={session.selectedModelId}
+              reasoningEffort={session.reasoningEffort}
+              chatConfig={session.chatConfig}
+              isActive={session.id === activeSessionId}
+              onConversationCreated={handleConversationCreated}
+              onStatusChange={handleStatusChange}
+            />
+          ))}
         </div>
-
-        <ChatPanel
-          input={input}
-          setInput={setInput}
-          onSubmit={handleSubmit}
-          onStop={stop}
-          status={status}
-          disabled={!selectedModelId}
-        />
       </div>
     </div>
   );

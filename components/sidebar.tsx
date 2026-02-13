@@ -23,10 +23,12 @@ export function Sidebar({
   currentConversationId,
   onNewChat,
   onSelectConversation,
+  streamingConversationIds = [],
 }: {
   currentConversationId?: string;
   onNewChat: () => void;
   onSelectConversation: (id: string) => void;
+  streamingConversationIds?: string[];
 }) {
   const pathname = usePathname();
   const { data: conversations = [], mutate } = useSWR<ConversationItem[]>('/api/conversations', fetcher);
@@ -85,7 +87,9 @@ export function Sidebar({
       {/* Conversation list */}
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-0.5">
-          {conversations.map((conv) => (
+          {conversations.map((conv) => {
+            const isStreaming = streamingConversationIds.includes(conv.id);
+            return (
             <div
               key={conv.id}
               onClick={() => onSelectConversation(conv.id)}
@@ -96,6 +100,9 @@ export function Sidebar({
                   : 'hover:bg-accent/50 text-muted-foreground hover:text-foreground'
               )}
             >
+              {isStreaming && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse flex-shrink-0" />
+              )}
               <div className="flex-1 min-w-0">
                 <p className="truncate text-[13px] font-medium">{conv.title || '新对话'}</p>
                 <p className="text-xs text-muted-foreground/70 mt-0.5">{formatTime(conv.updated_at)}</p>
@@ -110,7 +117,8 @@ export function Sidebar({
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
-          ))}
+          );
+          })}
         </div>
       </ScrollArea>
 
