@@ -19,6 +19,7 @@ interface ModelFormData {
   is_reasoning_model: number;
   default_reasoning_effort: string;
   reasoning_type: string;
+  supports_vision: number;
 }
 
 interface ProviderItem {
@@ -39,6 +40,7 @@ function makeInitForm(data?: Partial<ModelFormData>): ModelFormData {
     is_reasoning_model: data?.is_reasoning_model ?? 0,
     default_reasoning_effort: data?.default_reasoning_effort || 'medium',
     reasoning_type: data?.reasoning_type || 'levels',
+    supports_vision: data?.supports_vision ?? 1, // Default to support vision
   };
 }
 
@@ -179,6 +181,16 @@ export function ModelForm({
               onCheckedChange={checked => setForm(f => ({ ...f, enabled: checked ? 1 : 0 }))}
             />
             <Label>启用</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={form.supports_vision === 1}
+              onCheckedChange={checked => setForm(f => ({ ...f, supports_vision: checked ? 1 : 0 }))}
+            />
+            <div>
+              <Label>支持图片输入</Label>
+              <p className="text-xs text-muted-foreground">允许用户上传图片进行多模态对话</p>
+            </div>
           </div>
           <div className="space-y-3 border-t pt-4">
             <div className="flex items-center gap-2">

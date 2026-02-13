@@ -1,46 +1,117 @@
 # LLM Plaza
 
-🎯 一个功能强大的多模型 AI 聊天平台，支持多家主流 AI 提供商，提供丰富的配置选项和思考模型支持。
+一个功能强大的多模型 AI 聊天平台，支持多家主流 AI 提供商，提供丰富的配置选项和思考模型支持。
 
-## ✨ 主要特性
+## 已实现功能
 
-### 🤖 多模型支持
-- **OpenAI**: GPT-4o, GPT-4o Mini
-- **Anthropic**: Claude Sonnet 4, Claude 3.5 Haiku
-- **Google**: Gemini 2.0 Flash
-- **DeepSeek**: DeepSeek Chat, DeepSeek Reasoner
-- **智谱 AI (GLM)**: GLM-4-Flash, GLM-Zero-Preview
-- **千问 (Qwen)**: Qwen Plus, Qwen3-MAX
-- **月之暗面 (Moonshot)**: Moonshot v1 8K
-- **豆包 (Doubao)**: 支持思考模型
+### 对话核心
 
-### 🧠 思考模型支持
-- **Binary 模式** (GLM, Qwen, DeepSeek Reasoner): 启用/禁用思考
-- **Levels 模式** (Doubao): Minimal/Low/Medium/High 四档
-- 实时显示思考过程
-- 可动态切换思考程度
+- [x] 多轮对话，实时流式输出
+- [x] Markdown 渲染（GFM 表格、列表、引用等）
+- [x] 代码块语法高亮（Prism.js oneDark 主题）+ 一键复制
+- [x] 图片上传（多图、Base64、10MB 限制、缩略图预览）
+- [x] 思考过程折叠展示（点击展开）
+- [x] 重新生成最后一条回复
+- [x] 消息内容一键复制
+- [x] 对话自动保存 / 历史加载
+- [x] 对话标题搜索（全文检索，标题 + 内容）
+- [x] 一键清空所有对话记录
 
-### ⚙️ 高级参数配置
-- **系统提示词**: 自定义 AI 角色和行为
-- **Temperature**: 0.0-2.0，控制输出随机性
-- **Max Tokens**: 256-32000，限制生成长度
-- **Top P**: 0.0-1.0，核采样控制
-- **Frequency Penalty**: -2.0-2.0，减少重复
-- **Presence Penalty**: -2.0-2.0，鼓励新话题
+### 模型 & 提供商
 
-### 💬 对话管理
-- 多对话历史记录
-- 自动保存对话
-- 一键清空历史
-- 快速切换对话
+- [x] 8 家预置提供商：OpenAI / Anthropic / Google / DeepSeek / 通义千问 / 豆包 / 智谱 AI / Moonshot
+- [x] 自定义添加提供商（ID、名称、类型、Base URL、API Key）
+- [x] API 格式切换：Chat Completions（默认）/ Responses
+- [x] API Key 加密存储（AES-256-GCM）
+- [x] 模型 CRUD 管理，按提供商分组展示
+- [x] 思考模型支持：Binary 模式（启用/禁用）和 Levels 模式（关闭/低/中/高）
+- [x] 按提供商自动注入思考参数（thinking / enable_thinking / reasoning_effort）
+- [x] 默认模型设置
 
-### 🎨 用户体验
-- 响应式设计，支持移动端
-- 实时流式输出
-- 暗色模式支持
-- 直观的配置界面
+### 对话参数
 
-## 🚀 快速开始
+- [x] 系统提示词（对话级）
+- [x] 全局系统提示词（设置级，优先级最高，自动合并）
+- [x] Temperature / Max Tokens / Top P / Frequency Penalty / Presence Penalty
+- [x] 一键重置为默认值
+- [x] 配置摘要悬浮卡预览
+
+### 界面 & 体验
+
+- [x] 亮色 / 暗色主题切换
+- [x] 阅读宽度调节（窄屏 / 中等 / 宽屏）
+- [x] 侧边栏折叠 / 展开
+- [x] 移动端抽屉式侧边栏
+- [x] 输入框自动伸缩，Enter 发送 / Shift+Enter 换行
+- [x] 流式传输状态指示（脉冲动画 + "正在思考..."）
+- [x] 消息入场动画
+
+### 数据 & 安全
+
+- [x] SQLite 本地存储（WAL 模式）
+- [x] API Key AES-256-GCM 加密
+- [x] 请求日志（自动截断 Base64 图片数据）
+- [x] 自动添加 `stream_options.include_usage` 用于用量追踪
+
+---
+
+## 未来计划
+
+### 对话增强
+
+- [ ] 对话分支（从任意消息重新生成，保留历史分支）
+- [ ] 对话标题自动摘要（调用 LLM 生成标题）
+- [ ] 导出对话为 Markdown / PDF
+- [ ] 消息编辑（编辑已发送的用户消息并重新生成）
+- [ ] 多模型同时对比回答（同一问题发给多个模型）
+- [ ] 消息内引用回复（引用某条历史消息）
+- [ ] 拖拽上传文件（图片 / 文档）
+- [ ] 支持文件类型扩展（PDF、Word 等文档解析）
+- [ ] 语音输入 / TTS 语音播放
+
+### 提示词 & 模板
+
+- [ ] 提示词模板库（预置常用角色 / 场景模板）
+- [ ] 快捷模板一键填充（输入框工具栏已预留入口）
+- [ ] 提示词收藏夹（收藏常用提示词组合）
+- [ ] 提示词变量（支持 `{{variable}}` 占位符）
+
+### 模型 & 提供商
+
+- [ ] 模型能力标签（视觉、长上下文、函数调用等）
+- [ ] 自动检测 API Key 可用性（一键测试连通性）
+- [ ] Token 用量统计与可视化
+- [ ] 费用估算 / 历史费用追踪
+- [ ] 自定义模型参数预设（保存不同场景的参数组合）
+- [ ] 支持更多提供商类型（Azure OpenAI、AWS Bedrock、Ollama 本地模型）
+
+### 界面 & 体验
+
+- [ ] 国际化（i18n，英语 / 中文切换）
+- [ ] 键盘快捷键体系（Ctrl+N 新建、Ctrl+K 搜索等）
+- [ ] 对话列表文件夹 / 标签分类
+- [ ] 对话固定置顶
+- [ ] 全屏专注模式
+- [ ] 自定义主题色
+
+### 部署 & 安全
+
+- [ ] Docker 一键部署 / docker-compose
+- [ ] 用户认证（登录 / 注册）
+- [ ] 多用户支持与数据隔离
+- [ ] 速率限制 / 使用配额
+- [ ] 操作审计日志
+
+### 开发者
+
+- [ ] Plugin / MCP 扩展机制
+- [ ] Function Calling / Tool Use 支持
+- [ ] API 接口对外暴露（供第三方调用）
+- [ ] 自动化测试（单元测试 + E2E）
+
+---
+
+## 快速开始
 
 ### 环境要求
 
@@ -50,27 +121,19 @@
 ### 安装
 
 ```bash
-# 克隆项目
 git clone https://github.com/yourusername/llm-plaza.git
 cd llm-plaza
-
-# 安装依赖
 npm install
-
-# 初始化数据库
-npm run seed
 ```
 
 ### 配置
 
-1. 复制环境变量文件：
+1. 复制环境变量：
 ```bash
 cp .env.example .env.local
 ```
 
-2. 编辑 `.env.local`，配置你需要的 API Keys
-
-3. 或者在应用中通过设置页面配置 API Keys
+2. 编辑 `.env.local` 配置 API Key，或在应用设置页面中配置。
 
 ### 运行
 
@@ -79,160 +142,50 @@ cp .env.example .env.local
 npm run dev
 
 # 生产构建
-npm run build
-npm start
+npm run build && npm start
 ```
 
 打开 [http://localhost:3000](http://localhost:3000) 开始使用。
 
-## 📖 功能详解
+## 技术栈
 
-详细的配置说明和使用方法请参考下方各个章节。
+| 分类 | 技术 |
+|------|------|
+| 框架 | Next.js 14 (App Router) |
+| 前端 | React 19, TypeScript |
+| 样式 | TailwindCSS, shadcn/ui, Radix UI |
+| AI SDK | Vercel AI SDK 4.x |
+| 数据库 | SQLite (better-sqlite3) |
+| 状态 | React Hooks, SWR |
+| 代码高亮 | react-syntax-highlighter (Prism.js) |
+| Markdown | react-markdown, remark-gfm |
 
-## 🗂️ 项目结构
+## 项目结构
 
 ```
 llm-plaza/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API 路由
-│   │   ├── chat/         # 聊天 API
-│   │   ├── models/       # 模型管理
-│   │   ├── providers/    # 提供商管理
-│   │   ├── conversations/# 对话管理
-│   │   └── settings/     # 设置管理
-│   ├── settings/         # 设置页面
-│   ├── layout.tsx        # 根布局
-│   └── page.tsx          # 主聊天页面
-├── components/            # React 组件
-│   ├── chat/             # 聊天相关组件
-│   ├── settings/         # 设置相关组件
-│   ├── ui/               # UI 基础组件 (shadcn/ui)
-│   └── sidebar.tsx       # 侧边栏
-├── lib/                   # 核心逻辑
-│   ├── ai.ts             # AI SDK 集成
-│   ├── db.ts             # 数据库操作
-│   └── utils.ts          # 工具函数
-├── data/                  # 数据存储
-│   └── llm-plaza.db      # SQLite 数据库
-└── public/               # 静态资源
+│   │   ├── chat/          #   聊天流式接口
+│   │   ├── models/        #   模型 CRUD
+│   │   ├── providers/     #   提供商 CRUD
+│   │   ├── conversations/ #   对话 CRUD + 搜索
+│   │   └── settings/      #   设置读写
+│   ├── settings/          # 设置页面 (general / providers / models)
+│   └── page.tsx           # 主聊天页面
+├── components/
+│   ├── chat/              # 聊天组件 (消息列表、输入框、Markdown、模型选择等)
+│   ├── settings/          # 设置表单组件
+│   └── ui/                # shadcn/ui 基础组件
+├── lib/
+│   ├── ai.ts              # AI SDK 集成 & 提供商路由
+│   ├── db.ts              # SQLite 数据库操作
+│   ├── crypto.ts          # AES-256-GCM 加解密
+│   └── utils.ts           # 工具函数
+└── data/
+    └── llm-plaza.db       # SQLite 数据库文件
 ```
 
-## 🔧 技术栈
-
-- **框架**: Next.js 15 (App Router)
-- **UI**: React 19, TailwindCSS, shadcn/ui
-- **AI SDK**: Vercel AI SDK 4.x
-- **数据库**: SQLite (better-sqlite3)
-- **状态管理**: React Hooks, SWR
-- **样式**: TailwindCSS, Radix UI
-- **类型**: TypeScript
-
-## 🎯 核心功能说明
-
-### 思考模型
-
-支持两种思考模式：
-
-1. **Binary 模式** (智谱 GLM, 千问 Qwen, DeepSeek Reasoner)
-   - 参数: 
-     - GLM/DeepSeek: `thinking: {type: 'enabled'/'disabled'}`
-     - Qwen: `enable_thinking: true/false`
-   - UI: 启用思考 / 禁用思考
-
-2. **Levels 模式** (豆包 Doubao)
-   - 参数: `reasoning_effort: 'minimal'/'low'/'medium'/'high'`
-   - UI: Minimal / Low / Medium / High
-
-### 高级参数
-
-所有流式请求自动添加 `stream_options: {include_usage: true}` 用于计费追踪。
-
-#### 参数说明
-
-| 参数 | 范围 | 默认值 | 说明 |
-|------|------|--------|------|
-| Temperature | 0.0-2.0 | 0.7 | 控制随机性，低值更确定，高值更创造 |
-| Max Tokens | 256-32000 | 4096 | 限制生成长度 |
-| Top P | 0.0-1.0 | 1.0 | 核采样，控制词汇多样性 |
-| Frequency Penalty | -2.0-2.0 | 0 | 正值减少重复 |
-| Presence Penalty | -2.0-2.0 | 0 | 正值鼓励新话题 |
-
-## 🛠️ 开发
-
-### 数据库
-
-使用 SQLite 作为本地数据库，存储：
-- 提供商配置
-- 模型配置
-- 对话历史
-- 应用设置
-
-```bash
-# 重新初始化数据库
-npm run seed
-```
-
-### API 路由
-
-所有 API 路由都在 `app/api` 目录下：
-
-- `POST /api/chat` - 聊天流式响应
-- `GET /api/models` - 获取模型列表
-- `POST /api/models` - 创建模型
-- `PUT /api/models/[id]` - 更新模型
-- `GET /api/providers` - 获取提供商列表
-- `PUT /api/providers/[id]` - 更新提供商（配置 API Key）
-- `GET /api/conversations` - 获取对话列表
-- `POST /api/conversations` - 创建对话
-- `GET /api/settings` - 获取设置
-- `PUT /api/settings` - 更新设置
-
-## 🎨 使用示例
-
-### 场景 1: 代码助手
-```typescript
-系统提示词: "你是一个专业的编程助手，提供清晰、准确的代码和解释。"
-Temperature: 0.2
-Max Tokens: 4096
-思考模式: 根据需要选择
-```
-
-### 场景 2: 创意写作
-```typescript
-系统提示词: "你是一位富有想象力的作家，善于创作引人入胜的故事。"
-Temperature: 1.0
-Max Tokens: 8192
-Frequency Penalty: 0.5
-Presence Penalty: 0.3
-```
-
-## 🔧 调试
-
-所有请求都会在终端打印详细日志：
-
-```
-=== AI SDK HTTP Request ===
-Model ID: qwen-plus
-Chat Config: { systemPrompt: '...', temperature: 0.7, ... }
-Stream options: { temperature: 0.7, maxTokens: 4096, ... }
-```
-
-## 📝 待办事项
-
-- [ ] 配置预设管理
-- [ ] 图片上传和多模态输入
-- [ ] 导出对话为 Markdown
-- [ ] Docker 部署
-- [ ] 用户认证
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📄 许可证
+## 许可证
 
 MIT License
-
----
-
-如有问题或建议，欢迎提 Issue！

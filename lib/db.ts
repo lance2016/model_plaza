@@ -231,9 +231,21 @@ export function getModelsByProvider(providerId: string): Model[] {
   ).all(providerId) as Model[];
 }
 
-export function createModel(data: { id: string; provider_id: string; name: string; enabled?: number; temperature?: number; max_tokens?: number; sort_order?: number; is_reasoning_model?: number; default_reasoning_effort?: string; reasoning_type?: string }) {
+export function createModel(data: { 
+  id: string; 
+  provider_id: string; 
+  name: string; 
+  enabled?: number; 
+  temperature?: number; 
+  max_tokens?: number; 
+  sort_order?: number; 
+  is_reasoning_model?: number; 
+  default_reasoning_effort?: string; 
+  reasoning_type?: string;
+  supports_vision?: number;
+}) {
   getDb().prepare(
-    'INSERT INTO models (id, provider_id, name, enabled, temperature, max_tokens, sort_order, is_reasoning_model, default_reasoning_effort, reasoning_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO models (id, provider_id, name, enabled, temperature, max_tokens, sort_order, is_reasoning_model, default_reasoning_effort, reasoning_type, supports_vision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(
     data.id, 
     data.provider_id, 
@@ -244,11 +256,23 @@ export function createModel(data: { id: string; provider_id: string; name: strin
     data.sort_order ?? 0,
     data.is_reasoning_model ?? 0,
     data.default_reasoning_effort ?? 'medium',
-    data.reasoning_type ?? 'levels'
+    data.reasoning_type ?? 'levels',
+    data.supports_vision ?? 1 // Default to support vision
   );
 }
 
-export function updateModel(id: string, data: Partial<{ name: string; provider_id: string; enabled: number; temperature: number; max_tokens: number; sort_order: number; is_reasoning_model: number; default_reasoning_effort: string; reasoning_type: string }>) {
+export function updateModel(id: string, data: Partial<{ 
+  name: string; 
+  provider_id: string; 
+  enabled: number; 
+  temperature: number; 
+  max_tokens: number; 
+  sort_order: number; 
+  is_reasoning_model: number; 
+  default_reasoning_effort: string; 
+  reasoning_type: string;
+  supports_vision: number;
+}>) {
   const sets: string[] = [];
   const values: unknown[] = [];
   if (data.name !== undefined) { sets.push('name = ?'); values.push(data.name); }
@@ -260,6 +284,7 @@ export function updateModel(id: string, data: Partial<{ name: string; provider_i
   if (data.is_reasoning_model !== undefined) { sets.push('is_reasoning_model = ?'); values.push(data.is_reasoning_model); }
   if (data.default_reasoning_effort !== undefined) { sets.push('default_reasoning_effort = ?'); values.push(data.default_reasoning_effort); }
   if (data.reasoning_type !== undefined) { sets.push('reasoning_type = ?'); values.push(data.reasoning_type); }
+  if (data.supports_vision !== undefined) { sets.push('supports_vision = ?'); values.push(data.supports_vision); }
   if (sets.length === 0) return;
   values.push(id);
   getDb().prepare(`UPDATE models SET ${sets.join(', ')} WHERE id = ?`).run(...values);

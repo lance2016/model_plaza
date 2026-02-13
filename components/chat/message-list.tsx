@@ -3,9 +3,8 @@
 import { useEffect, useRef } from 'react';
 import type { UIMessage } from 'ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { User, Bot, Sparkles } from 'lucide-react';
+import { MarkdownRenderer } from '@/components/chat/markdown-renderer';
 import { MessageActions } from '@/components/chat/message-actions';
 import type { ReadingWidth } from '@/components/chat/reading-width-selector';
 import { widthOptions } from '@/components/chat/reading-width-selector';
@@ -103,11 +102,11 @@ export function MessageList({
                 }`} style={{ fontSize: '14.5px' }}>
                   {message.parts?.map((part, i) => {
                     if (part.type === 'text') {
-                      return (
-                        <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
-                          {part.text}
-                        </ReactMarkdown>
-                      );
+                      if (message.role === 'user') {
+                        // User messages: plain text, no markdown
+                        return <span key={i}>{part.text}</span>;
+                      }
+                      return <MarkdownRenderer key={i} content={part.text} />;
                     }
                     if (part.type === 'reasoning') {
                       return (

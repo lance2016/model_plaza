@@ -23,6 +23,7 @@ interface ModelItem {
   is_reasoning_model?: number;
   default_reasoning_effort?: string;
   reasoning_type?: string;
+  supports_vision?: number;
 }
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
@@ -125,16 +126,21 @@ export default function ModelsPage() {
                 </div>
               </CardHeader>
               <CardContent className="pb-3">
-                <div className="flex gap-4 text-sm text-muted-foreground items-center">
+                <div className="flex gap-4 text-sm text-muted-foreground items-center flex-wrap">
                   <span>Temperature: {model.temperature}</span>
                   <span>Max Tokens: {model.max_tokens}</span>
                   {model.is_reasoning_model === 1 && (
-                    <Badge variant="secondary" className="ml-2 text-[10px] bg-primary/10 text-primary border-0">
+                    <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-0">
                       🧠 思考模型 
                       {model.reasoning_type === 'binary' 
                         ? ` (${model.default_reasoning_effort === 'enabled' ? '启用' : '禁用'})` 
                         : ` (${model.default_reasoning_effort})`
                       }
+                    </Badge>
+                  )}
+                  {model.supports_vision === 1 && (
+                    <Badge variant="secondary" className="text-[10px] bg-green-500/10 text-green-600 dark:text-green-400 border-0">
+                      📷 支持图片
                     </Badge>
                   )}
                 </div>

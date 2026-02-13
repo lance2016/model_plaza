@@ -23,6 +23,7 @@ interface ChatSessionProps {
   isActive: boolean;
   isReasoningModel: boolean;
   reasoningType?: string;
+  supportsVision: boolean;
   onConversationCreated: (sessionId: string, conversationId: string) => void;
   onStatusChange: (sessionId: string, status: string) => void;
   onReasoningEffortChange: (effort: string) => void;
@@ -39,6 +40,7 @@ export function ChatSession({
   isActive,
   isReasoningModel,
   reasoningType,
+  supportsVision,
   onConversationCreated,
   onStatusChange,
   onReasoningEffortChange,
@@ -184,6 +186,7 @@ export function ChatSession({
         onReasoningEffortChange={onReasoningEffortChange}
         images={images}
         onImagesChange={setImages}
+        supportsVision={supportsVision}
       />
     </div>
   );

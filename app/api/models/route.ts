@@ -25,11 +25,35 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { id, provider_id, name, enabled, temperature, max_tokens, sort_order } = body;
+    const { 
+      id, 
+      provider_id, 
+      name, 
+      enabled, 
+      temperature, 
+      max_tokens, 
+      sort_order,
+      is_reasoning_model,
+      default_reasoning_effort,
+      reasoning_type,
+      supports_vision
+    } = body;
     if (!id || !provider_id || !name) {
       return NextResponse.json({ error: 'Missing required fields: id, provider_id, name' }, { status: 400 });
     }
-    createModel({ id, provider_id, name, enabled, temperature, max_tokens, sort_order });
+    createModel({ 
+      id, 
+      provider_id, 
+      name, 
+      enabled, 
+      temperature, 
+      max_tokens, 
+      sort_order,
+      is_reasoning_model,
+      default_reasoning_effort,
+      reasoning_type,
+      supports_vision
+    });
     return NextResponse.json({ success: true, id });
   } catch (error: unknown) {
     console.error('POST /api/models error:', error);

@@ -22,6 +22,7 @@ interface Model {
   is_reasoning_model: number;
   default_reasoning_effort: string;
   reasoning_type: string;
+  supports_vision: number;
 }
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
@@ -313,6 +314,7 @@ export default function ChatPage() {
               isActive={session.id === activeSessionId}
               isReasoningModel={session.id === activeSessionId ? isReasoningModel : false}
               reasoningType={session.id === activeSessionId ? currentModel?.reasoning_type : undefined}
+              supportsVision={session.id === activeSessionId ? (currentModel?.supports_vision === 1) : false}
               onConversationCreated={handleConversationCreated}
               onStatusChange={handleStatusChange}
               onReasoningEffortChange={handleReasoningEffortChange}

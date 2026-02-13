@@ -34,6 +34,7 @@ export function ChatPanel({
   onReasoningEffortChange,
   images,
   onImagesChange,
+  supportsVision = false,
 }: {
   input: string;
   setInput: (value: string) => void;
@@ -48,6 +49,7 @@ export function ChatPanel({
   onReasoningEffortChange?: (effort: string) => void;
   images: ImageAttachment[];
   onImagesChange: (images: ImageAttachment[]) => void;
+  supportsVision?: boolean;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,15 +168,18 @@ export function ChatPanel({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:text-primary"
+                  className={cn(
+                    "h-7 w-7 text-muted-foreground hover:text-foreground",
+                    supportsVision && "hover:text-primary"
+                  )}
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={disabled}
+                  disabled={disabled || !supportsVision}
                 >
                   <ImageIcon className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>上传图片 (支持多图)</p>
+                <p>{supportsVision ? '上传图片 (支持多图)' : '当前模型不支持图片输入'}</p>
               </TooltipContent>
             </Tooltip>
             

@@ -176,11 +176,19 @@ export function getLanguageModel(provider: Provider, modelId: string, reasoningE
     return (aiProvider as { responses: (id: string) => unknown }).responses(modelId);
   }
 
-  // For all openai_compatible providers (including OpenAI), explicitly use .chat() for completions
-  // The default callable of createOpenAI now uses Responses API, so we must use .chat() explicitly
+  // For openai_compatible providers
   if (provider.type === 'openai_compatible') {
-    return (aiProvider as { chat: (id: string) => unknown }).chat(modelId);
+    // For completion format, use the default callable
+    if (provider.api_format === 'completion') {
+      return (aiProvider as (id: string) => unknown)(modelId);
+    }
+    // For other formats (or no format specified), try .chat() method
+    // The default callable of createOpenAI now uses Responses API, so we must use .chat() explicitly
+    if ('chat' in aiProvider && typeof (aiProvider as { chat?: unknown }).chat === 'function') {
+      return (aiProvider as { chat: (id: string) => unknown }).chat(modelId);
+    }
   }
 
+  // Default: use as callable
   return (aiProvider as (id: string) => unknown)(modelId);
 }
