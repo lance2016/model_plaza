@@ -6,19 +6,37 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { User, Bot, Sparkles } from 'lucide-react';
+import { MessageActions } from '@/components/chat/message-actions';
+import type { ReadingWidth } from '@/components/chat/reading-width-selector';
+import { widthOptions } from '@/components/chat/reading-width-selector';
 
 export function MessageList({
   messages,
   status,
+  onRegenerate,
+  readingWidth = 'medium',
 }: {
   messages: UIMessage[];
   status: 'ready' | 'submitted' | 'streaming' | 'error';
+  onRegenerate?: () => void;
+  readingWidth?: ReadingWidth;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  
+  const maxWidthClass = widthOptions.find(w => w.value === readingWidth)?.maxWidth || 'max-w-3xl';
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, status]);
+
+  // Extract text content from message parts
+  const getMessageText = (message: UIMessage): string => {
+    if (!message.parts) return '';
+    return message.parts
+      .filter(part => part.type === 'text')
+      .map(part => part.text)
+      .join('\n');
+  };
 
   if (messages.length === 0) {
     return (
@@ -39,57 +57,80 @@ export function MessageList({
 
   return (
     <ScrollArea className="h-full">
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+      <div className={`${maxWidthClass} mx-auto px-4 py-8 space-y-6`}>
         {messages.map((message, index) => (
           <div
             key={message.id}
-            className="flex gap-3.5 animate-fade-in-up"
+            className={`group flex gap-3 animate-fade-in-up ${
+              message.role === 'user' ? 'justify-end' : 'justify-start'
+            }`}
             style={{ animationDelay: `${Math.min(index * 50, 300)}ms`, animationFillMode: 'backwards' }}
           >
-            <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-              message.role === 'user'
-                ? 'bg-primary/15 text-primary'
-                : 'bg-accent text-muted-foreground'
-            }`}>
-              {message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-            </div>
-            <div className="flex-1 min-w-0 pt-0.5">
-              <div className="text-xs text-muted-foreground/70 mb-1.5 font-medium uppercase tracking-wider">
-                {message.role === 'user' ? '你' : '助手'}
+            {message.role === 'assistant' && (
+              <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 shadow-sm">
+                <Bot className="h-4 w-4 text-primary" />
               </div>
-              <div className="prose prose-sm dark:prose-invert max-w-none text-[14px] leading-relaxed">
-                {message.parts?.map((part, i) => {
-                  if (part.type === 'text') {
-                    return (
-                      <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
-                        {part.text}
-                      </ReactMarkdown>
-                    );
-                  }
-                  if (part.type === 'reasoning') {
-                    return (
-                      <details key={i} open className="text-muted-foreground text-xs border border-border/50 rounded-lg p-3 my-3 bg-muted/30 backdrop-blur-sm transition-colors hover:bg-muted/50">
-                        <summary className="cursor-pointer font-medium text-muted-foreground/80 select-none">
-                          <span className="ml-1">思考过程</span>
-                        </summary>
-                        <div className="whitespace-pre-wrap mt-2.5 leading-relaxed text-muted-foreground/70 border-t border-border/30 pt-2.5">
+            )}
+            <div className={`${message.role === 'user' ? 'max-w-[65%]' : 'flex-1 max-w-[85%]'}`}>
+              <div className={`shadow-sm ${
+                message.role === 'user'
+                  ? 'bg-primary text-primary-foreground px-3.5 py-1.5 rounded-lg inline-block'
+                  : 'bg-card/80 backdrop-blur-sm border border-border/50 px-4 py-3 rounded-2xl'
+              }`}>
+                <div className={`prose prose-sm max-w-none leading-[1.7] ${
+                  message.role === 'user' ? 'prose-user' : 'dark:prose-invert'
+                }`} style={{ fontSize: '14.5px' }}>
+                  {message.parts?.map((part, i) => {
+                    if (part.type === 'text') {
+                      return (
+                        <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
                           {part.text}
-                        </div>
-                      </details>
-                    );
-                  }
-                  return null;
-                })}
+                        </ReactMarkdown>
+                      );
+                    }
+                    if (part.type === 'reasoning') {
+                      return (
+                        <details key={i} className="text-muted-foreground text-xs border border-border/30 rounded-lg p-3 my-3 bg-muted/20 backdrop-blur-sm transition-all hover:bg-muted/30 hover:border-border/40">
+                          <summary className="cursor-pointer font-medium text-muted-foreground/60 select-none hover:text-muted-foreground/80 transition-colors flex items-center gap-2">
+                            <svg className="w-3.5 h-3.5 transition-transform details-marker" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            <span>思考过程 (点击展开)</span>
+                          </summary>
+                          <div className="whitespace-pre-wrap mt-3 pt-3 leading-relaxed text-muted-foreground/60 border-t border-border/20 text-[11px]">
+                            {part.text}
+                          </div>
+                        </details>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
               </div>
+              {message.role === 'assistant' && (
+                <div className="mt-1">
+                  <MessageActions
+                    content={getMessageText(message)}
+                    role={message.role}
+                    onRegenerate={index === messages.length - 1 ? onRegenerate : undefined}
+                    canRegenerate={index === messages.length - 1 && status === 'ready'}
+                  />
+                </div>
+              )}
             </div>
+            {message.role === 'user' && (
+              <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-primary to-primary/80 shadow-sm">
+                <User className="h-4 w-4 text-primary-foreground" />
+              </div>
+            )}
           </div>
         ))}
         {status === 'submitted' && (
-          <div className="flex gap-3.5 animate-fade-in">
-            <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent text-muted-foreground">
-              <Bot className="h-4 w-4" />
+          <div className="flex gap-3 animate-fade-in justify-start">
+            <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 shadow-sm">
+              <Bot className="h-4 w-4 text-primary" />
             </div>
-            <div className="flex items-center gap-2.5 text-muted-foreground pt-1">
+            <div className="flex items-center gap-2.5 text-muted-foreground pt-2">
               <div className="flex gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-subtle-pulse" style={{ animationDelay: '0ms' }} />
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-subtle-pulse" style={{ animationDelay: '300ms' }} />

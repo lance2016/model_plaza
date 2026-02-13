@@ -10,6 +10,7 @@ import { ChatPanel } from '@/components/chat/chat-panel';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { ChatConfig } from '@/components/chat/advanced-settings';
+import type { ReadingWidth } from '@/components/chat/reading-width-selector';
 
 interface ChatSessionProps {
   sessionId: string;
@@ -18,9 +19,13 @@ interface ChatSessionProps {
   selectedModelId: string;
   reasoningEffort: string;
   chatConfig: ChatConfig;
+  readingWidth: ReadingWidth;
   isActive: boolean;
+  isReasoningModel: boolean;
+  reasoningType?: string;
   onConversationCreated: (sessionId: string, conversationId: string) => void;
   onStatusChange: (sessionId: string, status: string) => void;
+  onReasoningEffortChange: (effort: string) => void;
 }
 
 export function ChatSession({
@@ -30,9 +35,13 @@ export function ChatSession({
   selectedModelId,
   reasoningEffort,
   chatConfig,
+  readingWidth,
   isActive,
+  isReasoningModel,
+  reasoningType,
   onConversationCreated,
   onStatusChange,
+  onReasoningEffortChange,
 }: ChatSessionProps) {
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
@@ -90,6 +99,17 @@ export function ChatSession({
     }
   }, [status, sessionId, onStatusChange]);
 
+  const handleRegenerate = useCallback(() => {
+    if (messages.length < 2) return;
+    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMessage && lastUserMessage.parts) {
+      const textPart = lastUserMessage.parts.find(p => p.type === 'text');
+      if (textPart && 'text' in textPart) {
+        sendMessage({ text: textPart.text });
+      }
+    }
+  }, [messages, sendMessage]);
+
   const handleSubmit = useCallback(async () => {
     if (!input.trim() || !selectedModelIdRef.current) return;
     if (status === 'submitted' || status === 'streaming') return;
@@ -132,7 +152,7 @@ export function ChatSession({
       )}
 
       <div className="flex-1 overflow-hidden">
-        <MessageList messages={messages} status={status} />
+        <MessageList messages={messages} status={status} onRegenerate={handleRegenerate} readingWidth={readingWidth} />
       </div>
 
       <ChatPanel
@@ -142,6 +162,11 @@ export function ChatSession({
         onStop={stop}
         status={status}
         disabled={!selectedModelIdRef.current}
+        readingWidth={readingWidth}
+        isReasoningModel={isReasoningModel}
+        reasoningEffort={reasoningEffort}
+        reasoningType={reasoningType}
+        onReasoningEffortChange={onReasoningEffortChange}
       />
     </div>
   );

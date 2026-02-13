@@ -4,12 +4,13 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import useSWR from 'swr';
 import { ChatSession } from '@/components/chat/chat-session';
 import { ModelSelector } from '@/components/chat/model-selector';
-import { ReasoningEffortSelector } from '@/components/chat/reasoning-effort-selector';
 import { AdvancedSettings, type ChatConfig } from '@/components/chat/advanced-settings';
+import { ReadingWidthSelector, type ReadingWidth } from '@/components/chat/reading-width-selector';
+import { ConfigSummary } from '@/components/chat/config-summary';
 import { Sidebar } from '@/components/sidebar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu } from 'lucide-react';
+import { Menu, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import type { Session } from '@/lib/types';
 import { DEFAULT_CHAT_CONFIG } from '@/lib/types';
@@ -35,6 +36,8 @@ export default function ChatPage() {
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
+  const [readingWidth, setReadingWidth] = useState<ReadingWidth>('medium');
   const [defaultModelId, setDefaultModelId] = useState<string>('');
 
   const { data: models = [] } = useSWR<Model[]>('/api/models', fetcher);
@@ -71,17 +74,28 @@ export default function ChatPage() {
         console.error('Failed to load default model:', error);
       }
       setDefaultModelId(modelId);
+      
+      // Wait for models to load to get correct reasoning effort
+      const model = modelsRef.current.find(m => m.id === modelId);
+      const defaultReasoningEffort = model?.is_reasoning_model === 1 
+        ? (model.default_reasoning_effort || 'medium')
+        : 'medium';
+      
       const id = createSessionId();
       setSessions([{
         id,
         selectedModelId: modelId,
-        reasoningEffort: 'medium',
+        reasoningEffort: defaultReasoningEffort,
         chatConfig: { ...DEFAULT_CHAT_CONFIG },
       }]);
       setActiveSessionId(id);
     };
-    init();
-  }, []);
+    
+    // Only initialize when models are loaded
+    if (models.length > 0) {
+      init();
+    }
+  }, [models]);
 
   // Update reasoning effort when model changes for active session
   useEffect(() => {
@@ -216,23 +230,40 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen">
-      {/* Desktop sidebar */}
-      <aside className="w-64 border-r border-border/50 glass flex-shrink-0 hidden md:flex flex-col">
-        <Sidebar
-          currentConversationId={activeSession?.conversationId}
-          onNewChat={handleNewChat}
-          onSelectConversation={handleSelectConversation}
-          streamingConversationIds={streamingConversationIds}
-        />
-      </aside>
+      {/* Desktop sidebar - collapsible */}
+      {!desktopSidebarCollapsed && (
+        <aside className="w-64 border-r border-border/50 glass flex-shrink-0 hidden md:flex flex-col">
+          <Sidebar
+            currentConversationId={activeSession?.conversationId}
+            onNewChat={handleNewChat}
+            onSelectConversation={handleSelectConversation}
+            streamingConversationIds={streamingConversationIds}
+          />
+        </aside>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="flex items-center gap-2 px-4 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm">
+          {/* Desktop collapse toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden md:flex h-8 w-8"
+            onClick={() => setDesktopSidebarCollapsed(!desktopSidebarCollapsed)}
+          >
+            {desktopSidebarCollapsed ? (
+              <PanelLeft className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </Button>
+          
+          {/* Mobile menu */}
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="md:hidden h-8 w-8">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
@@ -245,19 +276,19 @@ export default function ChatPage() {
               />
             </SheetContent>
           </Sheet>
+          
           <ModelSelector
             value={activeSession?.selectedModelId || ''}
             onChange={handleModelChange}
           />
-          {isReasoningModel && (
-            <ReasoningEffortSelector
-              value={activeSession?.reasoningEffort || 'medium'}
-              onChange={handleReasoningEffortChange}
-              disabled={!activeSession?.selectedModelId}
-              reasoningType={currentModel?.reasoning_type}
-            />
-          )}
           <div className="ml-auto flex items-center gap-1">
+            <ConfigSummary
+              modelName={currentModel?.name || '未选择'}
+              reasoningEffort={activeSession?.reasoningEffort}
+              config={activeSession?.chatConfig || DEFAULT_CHAT_CONFIG}
+              isReasoningModel={isReasoningModel}
+            />
+            <ReadingWidthSelector value={readingWidth} onChange={setReadingWidth} />
             <ThemeToggle />
             <AdvancedSettings
               config={activeSession?.chatConfig || DEFAULT_CHAT_CONFIG}
@@ -278,9 +309,13 @@ export default function ChatPage() {
               selectedModelId={session.selectedModelId}
               reasoningEffort={session.reasoningEffort}
               chatConfig={session.chatConfig}
+              readingWidth={readingWidth}
               isActive={session.id === activeSessionId}
+              isReasoningModel={session.id === activeSessionId ? isReasoningModel : false}
+              reasoningType={session.id === activeSessionId ? currentModel?.reasoning_type : undefined}
               onConversationCreated={handleConversationCreated}
               onStatusChange={handleStatusChange}
+              onReasoningEffortChange={handleReasoningEffortChange}
             />
           ))}
         </div>

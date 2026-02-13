@@ -5,8 +5,9 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageSquarePlus, Settings, Trash2, Bot } from 'lucide-react';
+import { MessageSquarePlus, Settings, Trash2, Bot, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -33,6 +34,12 @@ export function Sidebar({
   const pathname = usePathname();
   const { data: conversations = [], mutate } = useSWR<ConversationItem[]>('/api/conversations', fetcher);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter conversations based on search
+  const filteredConversations = conversations.filter(conv => 
+    conv.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -48,20 +55,6 @@ export function Sidebar({
     }
   };
 
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return '刚刚';
-    if (minutes < 60) return `${minutes}分钟前`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}小时前`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}天前`;
-    return date.toLocaleDateString('zh-CN');
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -74,12 +67,32 @@ export function Sidebar({
         </Link>
         <Button
           onClick={onNewChat}
-          className="w-full justify-center gap-2 h-9 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all duration-200"
+          className="w-full justify-center gap-2 h-9 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all duration-200 mb-3"
           variant="ghost"
         >
           <MessageSquarePlus className="h-4 w-4" />
           新对话
         </Button>
+        
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="搜索对话..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 pl-9 pr-9 text-sm bg-background/50 border-border/50"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
+            >
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mx-4 h-px bg-border/50" />
@@ -87,7 +100,12 @@ export function Sidebar({
       {/* Conversation list */}
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-0.5">
-          {conversations.map((conv) => {
+          {filteredConversations.length === 0 && searchQuery && (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              未找到匹配的对话
+            </div>
+          )}
+          {filteredConversations.map((conv) => {
             const isStreaming = streamingConversationIds.includes(conv.id);
             return (
             <div
@@ -105,7 +123,6 @@ export function Sidebar({
               )}
               <div className="flex-1 min-w-0">
                 <p className="truncate text-[13px] font-medium">{conv.title || '新对话'}</p>
-                <p className="text-xs text-muted-foreground/70 mt-0.5">{formatTime(conv.updated_at)}</p>
               </div>
               <Button
                 variant="ghost"
