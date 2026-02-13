@@ -1,4 +1,6 @@
-import { streamText, type UIMessage, type CoreMessage } from 'ai';
+import { streamText, type UIMessage } from 'ai';
+
+type CoreMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 import { getModel, getProvider } from '@/lib/db';
 import { getLanguageModel } from '@/lib/ai';
 

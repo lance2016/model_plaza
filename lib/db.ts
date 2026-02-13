@@ -62,7 +62,7 @@ const PRESET_MODELS = [
   { id: 'claude-3-5-haiku-20241022', provider_id: 'anthropic', name: 'Claude 3.5 Haiku', sort_order: 1, is_reasoning: false, reasoning_type: 'levels' },
   { id: 'gemini-2.0-flash', provider_id: 'google', name: 'Gemini 2.0 Flash', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
   { id: 'deepseek-chat', provider_id: 'deepseek', name: 'DeepSeek Chat', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
-  { id: 'deepseek-reasoner', provider_id: 'deepseek', name: 'DeepSeek Reasoner', sort_order: 1, is_reasoning: true, reasoning_type: 'levels' },
+  { id: 'deepseek-reasoner', provider_id: 'deepseek', name: 'DeepSeek Reasoner', sort_order: 1, is_reasoning: true, reasoning_type: 'binary' },
   { id: 'qwen-plus', provider_id: 'qwen', name: 'Qwen Plus', sort_order: 0, is_reasoning: true, reasoning_type: 'binary' },
   { id: 'glm-4-flash', provider_id: 'zhipu', name: 'GLM-4-Flash', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
   { id: 'glm-zero-preview', provider_id: 'zhipu', name: 'GLM-Zero-Preview (思考)', sort_order: 1, is_reasoning: true, reasoning_type: 'binary' },

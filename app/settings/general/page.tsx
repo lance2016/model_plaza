@@ -98,10 +98,10 @@ export default function GeneralSettingsPage() {
         </Alert>
       )}
 
-      <Card>
+      <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle>默认模型</CardTitle>
-          <CardDescription>选择新建对话时默认使用的模型</CardDescription>
+          <CardTitle className="text-base font-semibold tracking-tight">默认模型</CardTitle>
+          <CardDescription className="text-muted-foreground/70">选择新建对话时默认使用的模型</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -125,10 +125,10 @@ export default function GeneralSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-destructive/20 bg-destructive/5">
         <CardHeader>
-          <CardTitle>数据管理</CardTitle>
-          <CardDescription>管理您的聊天记录</CardDescription>
+          <CardTitle className="text-base font-semibold tracking-tight">数据管理</CardTitle>
+          <CardDescription className="text-muted-foreground/70">管理您的聊天记录</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">

@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { ProviderForm } from '@/components/settings/provider-form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Pencil, Trash2, Plus, Key, AlertCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProviderItem {
   id: string;
@@ -27,20 +28,31 @@ export default function ProvidersPage() {
   const { data: providers, isLoading, mutate } = useSWR<ProviderItem[]>('/api/providers', fetcher);
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderItem | null>(null);
+  const { toast } = useToast();
 
   const handleToggle = async (id: string, enabled: boolean) => {
-    await fetch(`/api/providers/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: enabled ? 1 : 0 }),
-    });
-    mutate();
+    try {
+      await fetch(`/api/providers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: enabled ? 1 : 0 }),
+      });
+      mutate();
+      toast({ title: enabled ? 'Provider 已启用' : 'Provider 已禁用' });
+    } catch {
+      toast({ title: '操作失败', variant: 'destructive' });
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm(`确定删除 Provider "${id}"？相关模型也会被删除。`)) return;
-    await fetch(`/api/providers/${id}`, { method: 'DELETE' });
-    mutate();
+    try {
+      await fetch(`/api/providers/${id}`, { method: 'DELETE' });
+      mutate();
+      toast({ title: 'Provider 已删除' });
+    } catch {
+      toast({ title: '删除失败', variant: 'destructive' });
+    }
   };
 
   const handleEdit = (provider: ProviderItem) => {
@@ -63,7 +75,7 @@ export default function ProvidersPage() {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Provider 管理</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Provider 管理</h1>
         </div>
         {[1, 2, 3].map(i => (
           <Skeleton key={i} className="h-32 w-full" />
@@ -75,15 +87,15 @@ export default function ProvidersPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Provider 管理</h1>
-        <Button onClick={handleAdd}>
-          <Plus className="h-4 w-4 mr-1" />
+        <h1 className="text-2xl font-bold tracking-tight">Provider 管理</h1>
+        <Button onClick={handleAdd} className="gap-1.5 gradient-accent text-white shadow-sm hover:shadow-md transition-all duration-200">
+          <Plus className="h-4 w-4" />
           添加 Provider
         </Button>
       </div>
 
       {providers?.map(provider => (
-        <Card key={provider.id}>
+        <Card key={provider.id} className="border-border/50 bg-card/80 backdrop-blur-sm transition-all duration-200 hover:border-border">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -110,13 +122,13 @@ export default function ProvidersPage() {
               <span className="flex items-center gap-1">
                 {provider.has_api_key ? (
                   <>
-                    <Key className="h-3 w-3 text-green-500" />
-                    <span className="text-green-600">已配置</span>
+                    <Key className="h-3 w-3 text-emerald-400" />
+                    <span className="text-emerald-400 text-xs">已配置</span>
                   </>
                 ) : (
                   <>
-                    <AlertCircle className="h-3 w-3 text-orange-500" />
-                    <span className="text-orange-600">未配置 API Key</span>
+                    <AlertCircle className="h-3 w-3 text-amber-400" />
+                    <span className="text-amber-400 text-xs">未配置 API Key</span>
                   </>
                 )}
               </span>
@@ -128,7 +140,10 @@ export default function ProvidersPage() {
       <ProviderForm
         open={formOpen}
         onOpenChange={setFormOpen}
-        onSave={() => mutate()}
+        onSave={() => {
+          mutate();
+          toast({ title: editingProvider ? 'Provider 已更新' : 'Provider 已添加' });
+        }}
         initialData={editingProvider || undefined}
         isEdit={!!editingProvider}
       />

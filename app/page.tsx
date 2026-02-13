@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 interface Model {
   id: string;
@@ -40,7 +41,7 @@ export default function ChatPage() {
     presencePenalty: 0,
   });
   
-  const { data: models = [], mutate: mutateModels } = useSWR<Model[]>('/api/models', fetcher);
+  const { data: models = [] } = useSWR<Model[]>('/api/models', fetcher);
   const currentModel = models.find(m => m.id === selectedModelId);
   const isReasoningModel = currentModel?.is_reasoning_model === 1;
 
@@ -175,7 +176,7 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen">
       {/* Desktop sidebar */}
-      <aside className="w-64 border-r bg-muted/40 flex-shrink-0 hidden md:flex flex-col">
+      <aside className="w-64 border-r border-border/50 glass flex-shrink-0 hidden md:flex flex-col">
         <Sidebar
           currentConversationId={conversationId}
           onNewChat={handleNewChat}
@@ -186,14 +187,14 @@ export default function ChatPage() {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex items-center gap-2 p-3 border-b">
+        <header className="flex items-center gap-2 px-4 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm">
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
+            <SheetContent side="left" className="w-64 p-0 glass border-r border-border/50">
               <Sidebar
                 currentConversationId={conversationId}
                 onNewChat={handleNewChat}
@@ -210,8 +211,9 @@ export default function ChatPage() {
               reasoningType={currentModel?.reasoning_type}
             />
           )}
-          <div className="ml-auto">
-            <AdvancedSettings 
+          <div className="ml-auto flex items-center gap-1">
+            <ThemeToggle />
+            <AdvancedSettings
               config={chatConfig}
               onChange={setChatConfig}
               disabled={!selectedModelId}
@@ -220,7 +222,7 @@ export default function ChatPage() {
         </header>
 
         {error && (
-          <Alert variant="destructive" className="m-3 mb-0">
+          <Alert variant="destructive" className="m-4 mb-0 border-destructive/50 bg-destructive/10">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error.message}</AlertDescription>
           </Alert>

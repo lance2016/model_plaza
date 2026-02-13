@@ -28,11 +28,12 @@ const createLoggingFetch = (providerId: string, reasoningEffort?: string) => {
           // Different providers use different parameter formats
           switch (providerId) {
             case 'zhipu':
-              // GLM models use thinking parameter (binary: enabled/disabled)
+            case 'deepseek':
+              // GLM and DeepSeek use thinking parameter (binary: enabled/disabled)
               bodyJson.thinking = { 
                 type: reasoningEffort === 'disabled' ? 'disabled' : 'enabled'
               };
-              console.log(`✅ Injected thinking (${bodyJson.thinking.type}) for GLM model`);
+              console.log(`✅ Injected thinking (${bodyJson.thinking.type}) for ${providerId} model`);
               break;
             
             case 'qwen':
@@ -42,7 +43,6 @@ const createLoggingFetch = (providerId: string, reasoningEffort?: string) => {
               break;
             
             case 'doubao':
-            case 'deepseek':
             default:
               // Most providers use reasoning_effort parameter (levels: minimal/low/medium/high)
               bodyJson.reasoning_effort = reasoningEffort;
@@ -70,7 +70,7 @@ const createLoggingFetch = (providerId: string, reasoningEffort?: string) => {
         const bodyString = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
         const bodyJson = JSON.parse(bodyString);
         console.log('Request Body:', JSON.stringify(bodyJson, null, 2));
-      } catch (e) {
+      } catch {
         console.log('Request Body (raw):', init.body);
       }
     }
@@ -162,8 +162,8 @@ export function getLanguageModel(provider: Provider, modelId: string, reasoningE
   
   // For openai-compatible providers (except OpenAI itself), use chatModel method
   if (provider.type === 'openai_compatible' && provider.id !== 'openai') {
-    return aiProvider.chatModel(modelId);
+    return (aiProvider as { chatModel: (id: string) => unknown }).chatModel(modelId);
   }
-  
-  return aiProvider(modelId);
+
+  return (aiProvider as (id: string) => unknown)(modelId);
 }

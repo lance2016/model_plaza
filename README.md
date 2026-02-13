@@ -15,8 +15,8 @@
 - **豆包 (Doubao)**: 支持思考模型
 
 ### 🧠 思考模型支持
-- **Binary 模式** (GLM, Qwen): 启用/禁用思考
-- **Levels 模式** (DeepSeek, Doubao): Minimal/Low/Medium/High 四档
+- **Binary 模式** (GLM, Qwen, DeepSeek Reasoner): 启用/禁用思考
+- **Levels 模式** (Doubao): Minimal/Low/Medium/High 四档
 - 实时显示思考过程
 - 可动态切换思考程度
 
@@ -133,11 +133,13 @@ llm-plaza/
 
 支持两种思考模式：
 
-1. **Binary 模式** (智谱 GLM, 千问 Qwen)
-   - 参数: `thinking: {type: 'enabled'/'disabled'}` 或 `enable_thinking: true/false`
+1. **Binary 模式** (智谱 GLM, 千问 Qwen, DeepSeek Reasoner)
+   - 参数: 
+     - GLM/DeepSeek: `thinking: {type: 'enabled'/'disabled'}`
+     - Qwen: `enable_thinking: true/false`
    - UI: 启用思考 / 禁用思考
 
-2. **Levels 模式** (DeepSeek, 豆包)
+2. **Levels 模式** (豆包 Doubao)
    - 参数: `reasoning_effort: 'minimal'/'low'/'medium'/'high'`
    - UI: Minimal / Low / Medium / High
 
