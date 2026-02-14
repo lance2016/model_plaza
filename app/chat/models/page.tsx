@@ -1,20 +1,17 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { ChatSession } from '@/components/chat/chat-session';
-import { ModelSelector } from '@/components/chat/model-selector';
+import { ModelSelector } from '@/components/chat/grouped-model-selector';
 import { AdvancedSettings, type ChatConfig } from '@/components/chat/advanced-settings';
 import { ReadingWidthSelector, type ReadingWidth } from '@/components/chat/reading-width-selector';
 import { ConfigSummary } from '@/components/chat/config-summary';
-import { ModelSidebar } from '@/components/models/model-sidebar';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, PanelLeftClose, PanelLeft } from 'lucide-react';
-import { ModuleRail } from '@/components/layout/module-rail';
+import { MessageSquarePlus } from 'lucide-react';
 import type { Session } from '@/lib/types';
 import { DEFAULT_CHAT_CONFIG } from '@/lib/types';
-import type { UIMessage } from 'ai';
 
 interface Model {
   id: string;
@@ -32,12 +29,12 @@ function createSessionId() {
   return `model-session-${nextSessionId++}-${Date.now()}`;
 }
 
-export default function ModelsPage() {
+function ModelsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(new Set());
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [readingWidth, setReadingWidth] = useState<ReadingWidth>('medium');
   const [defaultModelId, setDefaultModelId] = useState<string>('');
 
@@ -58,7 +55,7 @@ export default function ModelsPage() {
   const currentModel = models.find(m => m.id === activeSession?.selectedModelId);
   const isReasoningModel = currentModel?.is_reasoning_model === 1;
 
-  // Load default model and create initial session
+  // Load default model or model from URL
   useEffect(() => {
     const init = async () => {
       let modelId = '';
@@ -71,6 +68,14 @@ export default function ModelsPage() {
       } catch (error) {
         console.error('Failed to load default model:', error);
       }
+
+      // Check if model is specified in URL
+      const urlModelId = searchParams?.get('model');
+      if (urlModelId) {
+        modelId = urlModelId;
+        router.replace('/chat/models');
+      }
+
       setDefaultModelId(modelId);
 
       const model = modelsRef.current.find(m => m.id === modelId);
@@ -89,7 +94,7 @@ export default function ModelsPage() {
     };
 
     if (models.length > 0) init();
-  }, [models]);
+  }, [models, searchParams, router]);
 
   // Update reasoning effort when model changes
   useEffect(() => {
@@ -146,43 +151,6 @@ export default function ModelsPage() {
       chatConfig: { ...DEFAULT_CHAT_CONFIG },
     }]);
     setActiveSessionId(id);
-    setSidebarOpen(false);
-  }, []);
-
-  const handleSelectConversation = useCallback(async (convId: string) => {
-    const existing = sessionsRef.current.find(s => s.conversationId === convId);
-    if (existing) {
-      setActiveSessionId(existing.id);
-      setSidebarOpen(false);
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/conversations/${encodeURIComponent(convId)}`);
-      if (res.ok) {
-        const conv = await res.json();
-        const id = createSessionId();
-        const parsedMessages: UIMessage[] = JSON.parse(conv.messages);
-        const modelId = conv.model_id || defaultModelIdRef.current;
-        const model = modelsRef.current.find(m => m.id === modelId);
-        const effort = model?.is_reasoning_model === 1
-          ? (model.default_reasoning_effort || 'medium')
-          : 'medium';
-
-        setSessions(prev => [...prev, {
-          id,
-          conversationId: convId,
-          selectedModelId: modelId,
-          reasoningEffort: effort,
-          chatConfig: { ...DEFAULT_CHAT_CONFIG },
-          initialMessages: parsedMessages,
-        }]);
-        setActiveSessionId(id);
-      }
-    } catch (e) {
-      console.error('Failed to load conversation:', e);
-    }
-    setSidebarOpen(false);
   }, []);
 
   const handleConversationCreated = useCallback((sessionId: string, convId: string) => {
@@ -200,109 +168,71 @@ export default function ModelsPage() {
     });
   }, []);
 
-  const streamingConversationIds = sessions
-    .filter(s => streamingSessionIds.has(s.id) && s.conversationId)
-    .map(s => s.conversationId!);
-
   if (!activeSessionId) return null;
 
   return (
-    <>
-      {/* Desktop sidebar */}
-      {!desktopSidebarCollapsed && (
-        <aside className="w-64 border-r border-border/50 glass flex-shrink-0 hidden md:flex flex-col">
-          <ModelSidebar
-            currentConversationId={activeSession?.conversationId}
-            onNewChat={handleNewChat}
-            onSelectConversation={handleSelectConversation}
-            streamingConversationIds={streamingConversationIds}
-          />
-        </aside>
-      )}
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="flex items-center gap-2 px-4 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-          {/* Desktop collapse toggle */}
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Header */}
+      <header className="flex items-center gap-3 px-4 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm">
+        <ModelSelector
+          value={activeSession?.selectedModelId || ''}
+          onChange={handleModelChange}
+        />
+        <div className="ml-auto flex items-center gap-2">
           <Button
-            variant="ghost"
-            size="icon"
-            className="hidden md:flex h-8 w-8"
-            onClick={() => setDesktopSidebarCollapsed(!desktopSidebarCollapsed)}
+            onClick={handleNewChat}
+            variant="outline"
+            size="sm"
+            className="gap-2"
           >
-            {desktopSidebarCollapsed ? (
-              <PanelLeft className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
+            <MessageSquarePlus className="h-3.5 w-3.5" />
+            新对话
           </Button>
-
-          {/* Mobile menu */}
-          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden h-8 w-8">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0 glass border-r border-border/50">
-              <div className="flex h-full">
-                <ModuleRail />
-                <div className="flex-1 flex flex-col">
-                  <ModelSidebar
-                    currentConversationId={activeSession?.conversationId}
-                    onNewChat={handleNewChat}
-                    onSelectConversation={handleSelectConversation}
-                    streamingConversationIds={streamingConversationIds}
-                  />
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-
-          <ModelSelector
-            value={activeSession?.selectedModelId || ''}
-            onChange={handleModelChange}
+          <ConfigSummary
+            modelName={currentModel?.name || '未选择'}
+            reasoningEffort={activeSession?.reasoningEffort}
+            config={activeSession?.chatConfig || DEFAULT_CHAT_CONFIG}
+            isReasoningModel={isReasoningModel}
           />
-          <div className="ml-auto flex items-center gap-1">
-            <ConfigSummary
-              modelName={currentModel?.name || '未选择'}
-              reasoningEffort={activeSession?.reasoningEffort}
-              config={activeSession?.chatConfig || DEFAULT_CHAT_CONFIG}
-              isReasoningModel={isReasoningModel}
-            />
-            <ReadingWidthSelector value={readingWidth} onChange={setReadingWidth} />
-            <AdvancedSettings
-              config={activeSession?.chatConfig || DEFAULT_CHAT_CONFIG}
-              onChange={handleChatConfigChange}
-              disabled={!activeSession?.selectedModelId}
-            />
-          </div>
-        </header>
-
-        {/* Chat sessions */}
-        <div className="flex-1 flex flex-col overflow-hidden relative">
-          {sessions.map(session => (
-            <ChatSession
-              key={session.id}
-              sessionId={session.id}
-              initialConversationId={session.conversationId}
-              initialMessages={session.initialMessages}
-              selectedModelId={session.selectedModelId}
-              reasoningEffort={session.reasoningEffort}
-              chatConfig={session.chatConfig}
-              readingWidth={readingWidth}
-              isActive={session.id === activeSessionId}
-              isReasoningModel={session.id === activeSessionId ? isReasoningModel : false}
-              reasoningType={session.id === activeSessionId ? currentModel?.reasoning_type : undefined}
-              supportsVision={session.id === activeSessionId ? (currentModel?.supports_vision === 1) : false}
-              onConversationCreated={handleConversationCreated}
-              onStatusChange={handleStatusChange}
-              onReasoningEffortChange={handleReasoningEffortChange}
-            />
-          ))}
+          <ReadingWidthSelector value={readingWidth} onChange={setReadingWidth} />
+          <AdvancedSettings
+            config={activeSession?.chatConfig || DEFAULT_CHAT_CONFIG}
+            onChange={handleChatConfigChange}
+            disabled={!activeSession?.selectedModelId}
+          />
         </div>
+      </header>
+
+      {/* Chat sessions */}
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        {sessions.map(session => (
+          <ChatSession
+            key={session.id}
+            sessionId={session.id}
+            initialConversationId={session.conversationId}
+            initialMessages={session.initialMessages}
+            selectedModelId={session.selectedModelId}
+            reasoningEffort={session.reasoningEffort}
+            chatConfig={session.chatConfig}
+            readingWidth={readingWidth}
+            isActive={session.id === activeSessionId}
+            isReasoningModel={session.id === activeSessionId ? isReasoningModel : false}
+            reasoningType={session.id === activeSessionId ? currentModel?.reasoning_type : undefined}
+            supportsVision={session.id === activeSessionId ? (currentModel?.supports_vision === 1) : false}
+            onConversationCreated={handleConversationCreated}
+            onStatusChange={handleStatusChange}
+            onReasoningEffortChange={handleReasoningEffortChange}
+          />
+        ))}
       </div>
-    </>
+    </div>
+  );
+}
+
+export default function ModelsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ModelsPageContent />
+    </Suspense>
   );
 }

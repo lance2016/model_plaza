@@ -46,7 +46,7 @@ export const ICON_COLORS = [
 interface AgentIconProps {
   icon: string;
   color?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
 }
 
@@ -54,12 +54,14 @@ export function AgentIcon({ icon, color = '#3b82f6', size = 'md', className }: A
   const IconComponent = ICON_MAP[icon] || Bot;
 
   const sizeClasses = {
+    xs: 'h-6 w-6',
     sm: 'h-8 w-8',
     md: 'h-10 w-10',
     lg: 'h-14 w-14',
   };
 
   const iconSizeClasses = {
+    xs: 'h-3.5 w-3.5',
     sm: 'h-4 w-4',
     md: 'h-5 w-5',
     lg: 'h-7 w-7',

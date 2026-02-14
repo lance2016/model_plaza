@@ -81,8 +81,16 @@ export default function AgentsBrowsePage() {
     return list;
   }, [agents, searchResults, searchQuery, filterTab, selectedTag]);
 
-  const handleUse = useCallback((agent: Agent) => {
-    router.push(`/chat/agents?agent=${encodeURIComponent(agent.id)}`);
+  const handleUse = useCallback(async (agent: Agent) => {
+    try {
+      // Use the agent API endpoint to record usage
+      await fetch(`/api/agents/${encodeURIComponent(agent.id)}/use`, { method: 'POST' });
+      // Navigate to main chat with agent parameter
+      router.push(`/chat?agent=${encodeURIComponent(agent.id)}`);
+    } catch (e) {
+      console.error('Failed to use agent:', e);
+      router.push(`/chat?agent=${encodeURIComponent(agent.id)}`);
+    }
   }, [router]);
 
   const handleToggleFavorite = useCallback(async (agent: Agent) => {
@@ -167,7 +175,7 @@ export default function AgentsBrowsePage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Back button */}
         <div className="mb-8">
-          <Link href="/chat/agents">
+          <Link href="/chat">
             <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground transition-colors duration-200">
               <ArrowLeft className="h-4 w-4" />
               返回对话
