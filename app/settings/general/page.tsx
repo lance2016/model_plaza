@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Trash2, AlertCircle, CheckCircle2, Globe } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,7 @@ export default function GeneralSettingsPage() {
   const [defaultModelId, setDefaultModelId] = useState<string>('');
   const [globalPromptEnabled, setGlobalPromptEnabled] = useState(false);
   const [globalPrompt, setGlobalPrompt] = useState('');
+  const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isClearing, setIsClearing] = useState(false);
@@ -48,6 +50,9 @@ export default function GeneralSettingsPage() {
     }
     if (settings?.global_system_prompt !== undefined) {
       setGlobalPrompt(settings.global_system_prompt);
+    }
+    if (settings?.tavily_api_key !== undefined) {
+      setTavilyApiKey(settings.tavily_api_key);
     }
   }, [settings]);
 
@@ -90,6 +95,23 @@ export default function GeneralSettingsPage() {
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error('Failed to save global prompt:', error);
+      setMessage({ type: 'error', text: '保存失败' });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const handleSaveTavilyKey = async () => {
+    try {
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'tavily_api_key', value: tavilyApiKey }),
+      });
+      mutate('/api/settings');
+      setMessage({ type: 'success', text: 'Tavily API Key 已保存' });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Failed to save Tavily key:', error);
       setMessage({ type: 'error', text: '保存失败' });
       setTimeout(() => setMessage(null), 3000);
     }
@@ -191,6 +213,39 @@ export default function GeneralSettingsPage() {
             </p>
           </div>
           <Button onClick={handleSaveGlobalPrompt}>
+            保存
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-primary" />
+            <div>
+              <CardTitle className="text-base font-semibold tracking-tight">联网搜索</CardTitle>
+              <CardDescription className="text-muted-foreground/70">
+                配置 Tavily API Key 后，智能体将支持联网搜索功能
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="tavily-key">Tavily API Key</Label>
+            <Input
+              id="tavily-key"
+              type="password"
+              placeholder="tvly-..."
+              value={tavilyApiKey}
+              onChange={(e) => setTavilyApiKey(e.target.value)}
+              className="border-border/50 bg-card/50 focus:border-primary/30"
+            />
+            <p className="text-xs text-muted-foreground/60 leading-relaxed">
+              前往 <a href="https://tavily.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">tavily.com</a> 获取 API Key，配置后智能体可自动搜索网络获取最新信息
+            </p>
+          </div>
+          <Button onClick={handleSaveTavilyKey}>
             保存
           </Button>
         </CardContent>

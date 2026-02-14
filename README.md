@@ -155,12 +155,36 @@ cd ../../../../..
 
 ### 配置
 
-1. 复制环境变量（可选）：
+#### 1. 配置加密密钥（必需）
+
+API Key 使用 AES-256-GCM 加密存储，需要配置 `ENCRYPTION_KEY` 环境变量。
+
+**生成加密密钥：**
+
+```bash
+# 方式一：使用 Node.js 生成（推荐）
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# 方式二：使用 OpenSSL 生成
+openssl rand -hex 32
+```
+
+**配置密钥：**
+
+1. 复制环境变量模板：
 ```bash
 cp .env.example .env.local
 ```
 
-2. 编辑 `.env.local` 配置加密密钥（可选），或使用默认值。
+2. 编辑 `.env.local`，将生成的 64 位十六进制字符串填入：
+```env
+ENCRYPTION_KEY=your_generated_64_hex_chars_here
+```
+
+⚠️ **重要提示**：
+- 密钥必须是 **64 个十六进制字符**（代表 32 字节）
+- 请妥善保管密钥，丢失后将无法解密已存储的 API Key
+- 首次设置后不要修改，否则已保存的 API Key 将无法解密
 
 ### 运行
 

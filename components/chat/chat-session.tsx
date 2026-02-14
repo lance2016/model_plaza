@@ -24,6 +24,10 @@ interface ChatSessionProps {
   isReasoningModel: boolean;
   reasoningType?: string;
   supportsVision: boolean;
+  agentId?: string;
+  agentName?: string;
+  agentIcon?: string;
+  agentIconColor?: string;
   onConversationCreated: (sessionId: string, conversationId: string) => void;
   onStatusChange: (sessionId: string, status: string) => void;
   onReasoningEffortChange: (effort: string) => void;
@@ -41,6 +45,10 @@ export function ChatSession({
   isReasoningModel,
   reasoningType,
   supportsVision,
+  agentId,
+  agentName,
+  agentIcon,
+  agentIconColor,
   onConversationCreated,
   onStatusChange,
   onReasoningEffortChange,
@@ -61,12 +69,16 @@ export function ChatSession({
   conversationIdRef.current = conversationId;
   onConversationCreatedRef.current = onConversationCreated;
 
+  const agentIdRef = useRef(agentId);
+  agentIdRef.current = agentId;
+
   const [transport] = useState(() => new DefaultChatTransport({
     api: '/api/chat',
     body: () => ({
       modelId: selectedModelIdRef.current,
       reasoningEffort: reasoningEffortRef.current,
       chatConfig: chatConfigRef.current,
+      agentId: agentIdRef.current,
     }),
   }));
 
@@ -130,6 +142,7 @@ export function ChatSession({
           body: JSON.stringify({
             model_id: selectedModelIdRef.current,
             title: text.slice(0, 50) || '图片对话',
+            ...(agentId ? { agent_id: agentId } : {}),
           }),
         });
         if (res.ok) {
@@ -157,7 +170,7 @@ export function ChatSession({
     } else {
       sendMessage({ text });
     }
-  }, [input, images, status, sendMessage, sessionId]);
+  }, [input, images, status, sendMessage, sessionId, agentId]);
 
   return (
     <div className={isActive ? 'flex-1 flex flex-col overflow-hidden' : 'hidden'}>
@@ -169,7 +182,7 @@ export function ChatSession({
       )}
 
       <div className="flex-1 overflow-hidden">
-        <MessageList messages={messages} status={status} onRegenerate={handleRegenerate} readingWidth={readingWidth} />
+        <MessageList messages={messages} status={status} onRegenerate={handleRegenerate} readingWidth={readingWidth} agentName={agentName} agentIcon={agentIcon} agentIconColor={agentIconColor} />
       </div>
 
       <ChatPanel

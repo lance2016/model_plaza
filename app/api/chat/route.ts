@@ -1,4 +1,4 @@
-import { streamText, type UIMessage } from 'ai';
+import { streamText, tool, jsonSchema, stepCountIs, type UIMessage } from 'ai';
 
 type ContentPart = { type: 'text'; text: string } | { type: 'image'; image: string; mimeType?: string };
 type CoreMessage = {
@@ -80,6 +80,7 @@ export async function POST(req: Request) {
       modelId,
       reasoningEffort,
       chatConfig,
+      agentId,
     }: {
       messages: UIMessage[];
       modelId: string;
@@ -92,6 +93,7 @@ export async function POST(req: Request) {
         frequencyPenalty?: number;
         presencePenalty?: number;
       };
+      agentId?: string;
     } = await req.json();
 
     console.log('=== Chat API Request ===');
@@ -158,17 +160,55 @@ export async function POST(req: Request) {
     }
     finalMessages.push(...coreMessages);
 
+    // Build tools map if agent session and Tavily key is configured
+    const tavilyApiKey = agentId ? getSetting('tavily_api_key') : undefined;
+    const tools = tavilyApiKey ? {
+      web_search: tool({
+        description: '搜索互联网获取最新信息。当用户询问实时信息、最新事件、需要验证的事实时使用。',
+        inputSchema: jsonSchema<{ query: string }>({
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '搜索关键词，使用简洁准确的关键词' },
+          },
+          required: ['query'],
+        }),
+        execute: async ({ query }: { query: string }) => {
+          console.log('🔍 Web search:', query);
+          try {
+            const res = await fetch('https://api.tavily.com/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                api_key: tavilyApiKey,
+                query,
+                max_results: 5,
+                include_answer: true,
+              }),
+            });
+            if (!res.ok) {
+              const err = await res.text();
+              console.error('Tavily error:', err);
+              return { error: '搜索失败，请稍后重试' };
+            }
+            const data = await res.json();
+            return {
+              answer: data.answer || '',
+              results: (data.results || []).map((r: { title: string; url: string; content: string }) => ({
+                title: r.title,
+                url: r.url,
+                content: r.content,
+              })),
+            };
+          } catch (e) {
+            console.error('Web search error:', e);
+            return { error: '搜索请求失败' };
+          }
+        },
+      }),
+    } : undefined;
+
     // Build streamText options with custom config or model defaults
-    const streamOptions: {
-      model: unknown;
-      messages: CoreMessage[];
-      temperature?: number;
-      maxTokens?: number;
-      topP?: number;
-      frequencyPenalty?: number;
-      presencePenalty?: number;
-      experimental_providerMetadata?: Record<string, unknown>;
-    } = {
+    const streamOptions: Record<string, unknown> = {
       model: languageModel,
       messages: finalMessages,
       temperature: chatConfig?.temperature ?? model.temperature,
@@ -177,6 +217,11 @@ export async function POST(req: Request) {
       frequencyPenalty: chatConfig?.frequencyPenalty,
       presencePenalty: chatConfig?.presencePenalty,
     };
+
+    if (tools) {
+      streamOptions.tools = tools;
+      streamOptions.stopWhen = stepCountIs(3);
+    }
 
     // Add reasoning effort if model supports it
     if (model.is_reasoning_model && reasoningEffort) {
@@ -193,6 +238,7 @@ export async function POST(req: Request) {
       hasGlobalPrompt: !!globalPrompt,
       temperature: streamOptions.temperature,
       maxTokens: streamOptions.maxTokens,
+      hasTools: !!tools,
     });
 
     const result = streamText(streamOptions as never);

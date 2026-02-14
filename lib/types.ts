@@ -8,6 +8,10 @@ export interface Session {
   reasoningEffort: string;
   chatConfig: ChatConfig;
   initialMessages?: UIMessage[];
+  agentId?: string;
+  agentName?: string;
+  agentIcon?: string;
+  agentIconColor?: string;
 }
 
 export const DEFAULT_CHAT_CONFIG: ChatConfig = {

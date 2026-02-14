@@ -3,7 +3,8 @@
 import { useEffect, useRef } from 'react';
 import type { UIMessage } from 'ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { User, Bot, Sparkles } from 'lucide-react';
+import { User, Bot, Sparkles, Globe, Loader2, ExternalLink } from 'lucide-react';
+import { AgentIcon } from '@/components/agents/agent-icon';
 import { MarkdownRenderer } from '@/components/chat/markdown-renderer';
 import { MessageActions } from '@/components/chat/message-actions';
 import type { ReadingWidth } from '@/components/chat/reading-width-selector';
@@ -14,11 +15,17 @@ export function MessageList({
   status,
   onRegenerate,
   readingWidth = 'medium',
+  agentName,
+  agentIcon,
+  agentIconColor,
 }: {
   messages: UIMessage[];
   status: 'ready' | 'submitted' | 'streaming' | 'error';
   onRegenerate?: () => void;
   readingWidth?: ReadingWidth;
+  agentName?: string;
+  agentIcon?: string;
+  agentIconColor?: string;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   
@@ -41,14 +48,26 @@ export function MessageList({
     return (
       <div className="flex-1 flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="relative mx-auto mb-6 w-16 h-16">
-            <div className="absolute inset-0 rounded-2xl gradient-accent opacity-20 animate-subtle-pulse" />
-            <div className="relative h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center animate-float">
-              <Sparkles className="h-7 w-7 text-primary" />
-            </div>
-          </div>
-          <p className="text-lg font-medium text-foreground/90 tracking-tight">LLM Plaza</p>
-          <p className="text-sm text-muted-foreground mt-1.5">选择一个模型，开始对话</p>
+          {agentName ? (
+            <>
+              <div className="mx-auto mb-6">
+                <AgentIcon icon={agentIcon || 'bot'} color={agentIconColor || '#3b82f6'} size="lg" className="mx-auto" />
+              </div>
+              <p className="text-lg font-medium text-foreground/90 tracking-tight">{agentName}</p>
+              <p className="text-sm text-muted-foreground mt-1.5">输入消息，开始对话</p>
+            </>
+          ) : (
+            <>
+              <div className="relative mx-auto mb-6 w-16 h-16">
+                <div className="absolute inset-0 rounded-2xl gradient-accent opacity-20 animate-subtle-pulse" />
+                <div className="relative h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center animate-float">
+                  <Sparkles className="h-7 w-7 text-primary" />
+                </div>
+              </div>
+              <p className="text-lg font-medium text-foreground/90 tracking-tight">LLM Plaza</p>
+              <p className="text-sm text-muted-foreground mt-1.5">选择一个模型，开始对话</p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -121,6 +140,55 @@ export function MessageList({
                             {part.text}
                           </div>
                         </details>
+                      );
+                    }
+                    if (part.type === 'tool-web_search' || (part.type as string).startsWith('tool-')) {
+                      const toolPart = part as unknown as {
+                        type: string;
+                        toolCallId: string;
+                        input?: { query?: string };
+                        state: string;
+                        output?: {
+                          results?: Array<{ title: string; url: string; content: string }>;
+                        };
+                      };
+                      const query = toolPart.input?.query || '';
+                      const isLoading = toolPart.state !== 'output-available';
+                      const sources = toolPart.output?.results || [];
+                      return (
+                        <div key={i} className="text-xs border border-border/30 rounded-lg my-2 bg-muted/20 overflow-hidden">
+                          <div className="flex items-center gap-2 p-2.5">
+                            {isLoading ? (
+                              <Loader2 className="h-3.5 w-3.5 text-primary animate-spin flex-shrink-0" />
+                            ) : (
+                              <Globe className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                            )}
+                            <span className="text-muted-foreground/70">
+                              {isLoading ? '正在搜索' : '已搜索'}：{query}
+                            </span>
+                          </div>
+                          {!isLoading && sources.length > 0 && (
+                            <div className="border-t border-border/20 px-2.5 py-2 space-y-1">
+                              {sources.map((source, si) => {
+                                let domain = '';
+                                try { domain = new URL(source.url).hostname.replace('www.', ''); } catch {}
+                                return (
+                                  <a
+                                    key={si}
+                                    href={source.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-primary transition-colors group/src"
+                                  >
+                                    <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-40 group-hover/src:opacity-100" />
+                                    <span className="truncate">{source.title}</span>
+                                    {domain && <span className="text-muted-foreground/40 flex-shrink-0">({domain})</span>}
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       );
                     }
                     return null;

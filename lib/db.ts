@@ -32,9 +32,33 @@ export interface Model {
 export interface Conversation {
   id: string;
   model_id: string;
+  agent_id: string;
   title: string;
   messages: string;
   token_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  icon_color: string;
+  system_prompt: string;
+  model_id: string;
+  temperature: number;
+  max_tokens: number;
+  top_p: number;
+  frequency_penalty: number;
+  presence_penalty: number;
+  tags: string;
+  is_preset: number;
+  is_published: number;
+  is_favorited: number;
+  use_count: number;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +94,22 @@ const PRESET_MODELS = [
   { id: 'moonshot-v1-8k', provider_id: 'moonshot', name: 'Moonshot v1 8K', sort_order: 0, is_reasoning: false, reasoning_type: 'levels' },
 ];
 
+const PRESET_AGENTS = [
+  {
+    id: 'agent-default', name: '通用助手', description: '智能对话助手，支持联网搜索，帮你回答问题、查找资料、分析信息', icon: 'sparkles', icon_color: '#3b82f6',
+    system_prompt: `你是一个智能助手。你可以帮助用户回答问题、提供建议、进行分析和创作。
+
+当用户的问题涉及实时信息、最新事件、需要验证的事实、或你不确定的内容时，请使用 web_search 工具搜索互联网获取最新信息。搜索时请使用简洁准确的关键词。
+
+回答时请：
+- 基于搜索结果提供准确、有据可查的信息
+- 标注信息来源
+- 如果搜索结果不足以回答问题，坦诚告知用户
+- 使用用户的语言回答`,
+    tags: '["通用", "搜索", "助手"]', sort_order: 0,
+  },
+];
+
 // Singleton
 let db: Database.Database | null = null;
 
@@ -103,7 +143,8 @@ export function getDb(): Database.Database {
       sort_order INTEGER DEFAULT 0,
       is_reasoning_model INTEGER DEFAULT 0,
       default_reasoning_effort TEXT DEFAULT 'medium',
-      reasoning_type TEXT DEFAULT 'levels'
+      reasoning_type TEXT DEFAULT 'levels',
+      supports_vision INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS conversations (
@@ -112,6 +153,29 @@ export function getDb(): Database.Database {
       title TEXT DEFAULT '',
       messages TEXT NOT NULL DEFAULT '[]',
       token_count INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS agents (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      icon TEXT DEFAULT 'bot',
+      icon_color TEXT DEFAULT '#3b82f6',
+      system_prompt TEXT NOT NULL DEFAULT '',
+      model_id TEXT DEFAULT '',
+      temperature REAL DEFAULT 0.7,
+      max_tokens INTEGER DEFAULT 4096,
+      top_p REAL DEFAULT 1.0,
+      frequency_penalty REAL DEFAULT 0,
+      presence_penalty REAL DEFAULT 0,
+      tags TEXT DEFAULT '[]',
+      is_preset INTEGER DEFAULT 0,
+      is_published INTEGER DEFAULT 1,
+      is_favorited INTEGER DEFAULT 0,
+      use_count INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -128,10 +192,26 @@ export function getDb(): Database.Database {
     db.exec("ALTER TABLE providers ADD COLUMN api_format TEXT DEFAULT 'completion'");
   }
 
+  const modelColumns = db.prepare("PRAGMA table_info(models)").all() as { name: string }[];
+  if (!modelColumns.some(c => c.name === 'supports_vision')) {
+    db.exec("ALTER TABLE models ADD COLUMN supports_vision INTEGER DEFAULT 1");
+  }
+
+  const convColumns = db.prepare("PRAGMA table_info(conversations)").all() as { name: string }[];
+  if (!convColumns.some(c => c.name === 'agent_id')) {
+    db.exec("ALTER TABLE conversations ADD COLUMN agent_id TEXT DEFAULT ''");
+  }
+
   // Auto-seed if empty
   const count = db.prepare('SELECT COUNT(*) as count FROM providers').get() as { count: number };
   if (count.count === 0) {
     seedData(db);
+  }
+
+  // Seed agents if empty
+  const agentCount = db.prepare('SELECT COUNT(*) as count FROM agents').get() as { count: number };
+  if (agentCount.count === 0) {
+    seedAgents(db);
   }
 
   return db;
@@ -159,6 +239,19 @@ function seedData(database: Database.Database) {
         m.is_reasoning ? (m.reasoning_type === 'binary' ? 'enabled' : 'medium') : 'medium',
         m.reasoning_type
       );
+    }
+  });
+  tx();
+}
+
+function seedAgents(database: Database.Database) {
+  const insertAgent = database.prepare(
+    'INSERT OR IGNORE INTO agents (id, name, description, icon, icon_color, system_prompt, tags, is_preset, is_published, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)'
+  );
+
+  const tx = database.transaction(() => {
+    for (const a of PRESET_AGENTS) {
+      insertAgent.run(a.id, a.name, a.description, a.icon, a.icon_color, a.system_prompt, a.tags, a.sort_order);
     }
   });
   tx();
@@ -296,30 +389,33 @@ export function deleteModel(id: string) {
 
 // === Conversation queries ===
 
-export function getAllConversations(): Omit<Conversation, 'messages'>[] {
-  return getDb().prepare(
-    'SELECT id, model_id, title, token_count, created_at, updated_at FROM conversations ORDER BY updated_at DESC'
-  ).all() as Omit<Conversation, 'messages'>[];
+export function getAllConversations(mode?: 'model' | 'agent'): Omit<Conversation, 'messages'>[] {
+  let sql = 'SELECT id, model_id, agent_id, title, token_count, created_at, updated_at FROM conversations';
+  if (mode === 'model') sql += " WHERE agent_id = '' OR agent_id IS NULL";
+  else if (mode === 'agent') sql += " WHERE agent_id != '' AND agent_id IS NOT NULL";
+  sql += ' ORDER BY updated_at DESC';
+  return getDb().prepare(sql).all() as Omit<Conversation, 'messages'>[];
 }
 
-export function searchConversations(query: string): Omit<Conversation, 'messages'>[] {
+export function searchConversations(query: string, mode?: 'model' | 'agent'): Omit<Conversation, 'messages'>[] {
   const searchPattern = `%${query}%`;
-  return getDb().prepare(
-    `SELECT id, model_id, title, token_count, created_at, updated_at 
-     FROM conversations 
-     WHERE title LIKE ? OR messages LIKE ?
-     ORDER BY updated_at DESC`
-  ).all(searchPattern, searchPattern) as Omit<Conversation, 'messages'>[];
+  let sql = `SELECT id, model_id, agent_id, title, token_count, created_at, updated_at
+     FROM conversations
+     WHERE (title LIKE ? OR messages LIKE ?)`;
+  if (mode === 'model') sql += " AND (agent_id = '' OR agent_id IS NULL)";
+  else if (mode === 'agent') sql += " AND (agent_id != '' AND agent_id IS NOT NULL)";
+  sql += ' ORDER BY updated_at DESC';
+  return getDb().prepare(sql).all(searchPattern, searchPattern) as Omit<Conversation, 'messages'>[];
 }
 
 export function getConversation(id: string): Conversation | undefined {
   return getDb().prepare('SELECT * FROM conversations WHERE id = ?').get(id) as Conversation | undefined;
 }
 
-export function createConversation(data: { id: string; model_id: string; title?: string; messages?: string }) {
+export function createConversation(data: { id: string; model_id: string; title?: string; messages?: string; agent_id?: string }) {
   getDb().prepare(
-    'INSERT INTO conversations (id, model_id, title, messages) VALUES (?, ?, ?, ?)'
-  ).run(data.id, data.model_id, data.title || '', data.messages || '[]');
+    'INSERT INTO conversations (id, model_id, title, messages, agent_id) VALUES (?, ?, ?, ?, ?)'
+  ).run(data.id, data.model_id, data.title || '', data.messages || '[]', data.agent_id || '');
 }
 
 export function updateConversation(id: string, data: Partial<{ title: string; messages: string; token_count: number; model_id: string }>) {
@@ -358,4 +454,123 @@ export function getAllSettings(): Record<string, string> {
 
 export function clearAllConversations() {
   getDb().prepare('DELETE FROM conversations').run();
+}
+
+// === Agent queries ===
+
+export function getAllAgents(): Agent[] {
+  return getDb().prepare('SELECT * FROM agents ORDER BY sort_order, created_at DESC').all() as Agent[];
+}
+
+export function getPublishedAgents(): Agent[] {
+  return getDb().prepare('SELECT * FROM agents WHERE is_published = 1 ORDER BY sort_order, created_at DESC').all() as Agent[];
+}
+
+export function getFavoritedAgents(): Agent[] {
+  return getDb().prepare('SELECT * FROM agents WHERE is_favorited = 1 ORDER BY sort_order, created_at DESC').all() as Agent[];
+}
+
+export function searchAgents(query: string): Agent[] {
+  const pattern = `%${query}%`;
+  return getDb().prepare(
+    'SELECT * FROM agents WHERE (name LIKE ? OR description LIKE ? OR tags LIKE ?) AND is_published = 1 ORDER BY sort_order, created_at DESC'
+  ).all(pattern, pattern, pattern) as Agent[];
+}
+
+export function getAgent(id: string): Agent | undefined {
+  return getDb().prepare('SELECT * FROM agents WHERE id = ?').get(id) as Agent | undefined;
+}
+
+export function getDefaultAgent(): Agent | undefined {
+  const defaultId = getSetting('default_agent_id');
+  if (defaultId) {
+    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(defaultId) as Agent | undefined;
+    if (agent) return agent;
+  }
+  // Fallback: first agent by sort order
+  return getDb().prepare('SELECT * FROM agents ORDER BY sort_order ASC, created_at ASC LIMIT 1').get() as Agent | undefined;
+}
+
+export function createAgent(data: {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  icon_color?: string;
+  system_prompt: string;
+  model_id?: string;
+  temperature?: number;
+  max_tokens?: number;
+  top_p?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  tags?: string;
+  is_published?: number;
+}) {
+  getDb().prepare(
+    `INSERT INTO agents (id, name, description, icon, icon_color, system_prompt, model_id, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, tags, is_published)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    data.id,
+    data.name,
+    data.description ?? '',
+    data.icon ?? 'bot',
+    data.icon_color ?? '#3b82f6',
+    data.system_prompt,
+    data.model_id ?? '',
+    data.temperature ?? 0.7,
+    data.max_tokens ?? 4096,
+    data.top_p ?? 1.0,
+    data.frequency_penalty ?? 0,
+    data.presence_penalty ?? 0,
+    data.tags ?? '[]',
+    data.is_published ?? 1
+  );
+}
+
+export function updateAgent(id: string, data: Partial<{
+  name: string;
+  description: string;
+  icon: string;
+  icon_color: string;
+  system_prompt: string;
+  model_id: string;
+  temperature: number;
+  max_tokens: number;
+  top_p: number;
+  frequency_penalty: number;
+  presence_penalty: number;
+  tags: string;
+  is_published: number;
+  is_favorited: number;
+  sort_order: number;
+}>) {
+  const sets: string[] = ['updated_at = CURRENT_TIMESTAMP'];
+  const values: unknown[] = [];
+  if (data.name !== undefined) { sets.push('name = ?'); values.push(data.name); }
+  if (data.description !== undefined) { sets.push('description = ?'); values.push(data.description); }
+  if (data.icon !== undefined) { sets.push('icon = ?'); values.push(data.icon); }
+  if (data.icon_color !== undefined) { sets.push('icon_color = ?'); values.push(data.icon_color); }
+  if (data.system_prompt !== undefined) { sets.push('system_prompt = ?'); values.push(data.system_prompt); }
+  if (data.model_id !== undefined) { sets.push('model_id = ?'); values.push(data.model_id); }
+  if (data.temperature !== undefined) { sets.push('temperature = ?'); values.push(data.temperature); }
+  if (data.max_tokens !== undefined) { sets.push('max_tokens = ?'); values.push(data.max_tokens); }
+  if (data.top_p !== undefined) { sets.push('top_p = ?'); values.push(data.top_p); }
+  if (data.frequency_penalty !== undefined) { sets.push('frequency_penalty = ?'); values.push(data.frequency_penalty); }
+  if (data.presence_penalty !== undefined) { sets.push('presence_penalty = ?'); values.push(data.presence_penalty); }
+  if (data.tags !== undefined) { sets.push('tags = ?'); values.push(data.tags); }
+  if (data.is_published !== undefined) { sets.push('is_published = ?'); values.push(data.is_published); }
+  if (data.is_favorited !== undefined) { sets.push('is_favorited = ?'); values.push(data.is_favorited); }
+  if (data.sort_order !== undefined) { sets.push('sort_order = ?'); values.push(data.sort_order); }
+  if (sets.length <= 1) return;
+  values.push(id);
+  getDb().prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+}
+
+export function deleteAgent(id: string) {
+  getDb().prepare('DELETE FROM agents WHERE id = ?').run(id);
+}
+
+export function incrementAgentUseCount(id: string) {
+  getDb().prepare('UPDATE agents SET use_count = use_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
 }

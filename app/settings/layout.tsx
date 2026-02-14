@@ -14,7 +14,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
-          <Link href="/">
+          <Link href="/chat/models">
             <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground transition-colors duration-200">
               <ArrowLeft className="h-4 w-4" />
               返回对话
