@@ -38,12 +38,21 @@ export interface AgentFormData {
   presence_penalty: number;
   tags: string;
   is_published: number;
+  supports_vision: number;
+  is_reasoning_model: number;
+  default_reasoning_effort: string;
+  reasoning_type: string;
+  enabled_tools: string;
 }
 
 interface Model {
   id: string;
   name: string;
   provider_name?: string;
+  supports_vision?: number;
+  is_reasoning_model?: number;
+  default_reasoning_effort?: string;
+  reasoning_type?: string;
 }
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
@@ -68,6 +77,14 @@ export function AgentForm({ open, onOpenChange, agent, onSave }: AgentFormProps)
   });
   const [isPublished, setIsPublished] = useState(agent?.is_published !== 0);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  
+  // Tools configuration
+  const [enabledTools, setEnabledTools] = useState<string[]>(() => {
+    try { return agent?.enabled_tools ? JSON.parse(agent.enabled_tools) : ['web_search']; } catch { return ['web_search']; }
+  });
+  
+  // Get selected model info
+  const selectedModel = models.find(m => m.id === modelId);
 
   // Sync form state when agent prop or open state changes
   useEffect(() => {
@@ -85,6 +102,7 @@ export function AgentForm({ open, onOpenChange, agent, onSave }: AgentFormProps)
       setPresencePenalty(agent?.presence_penalty ?? 0);
       setTags(() => { try { return agent?.tags ? JSON.parse(agent.tags) : []; } catch { return []; } });
       setIsPublished(agent?.is_published !== 0);
+      setEnabledTools(() => { try { return agent?.enabled_tools ? JSON.parse(agent.enabled_tools) : ['web_search']; } catch { return ['web_search']; } });
       setTagInput('');
     }
   }, [open, agent]);
@@ -100,9 +118,29 @@ export function AgentForm({ open, onOpenChange, agent, onSave }: AgentFormProps)
   const removeTag = (tag: string) => {
     setTags(tags.filter(t => t !== tag));
   };
+  
+  const toggleTool = (toolName: string) => {
+    setEnabledTools(prev => 
+      prev.includes(toolName)
+        ? prev.filter(t => t !== toolName)
+        : [...prev, toolName]
+    );
+  };
 
   const handleSubmit = () => {
     if (!name.trim() || !systemPrompt.trim()) return;
+    
+    // Get model config if model is selected
+    let modelConfig = {};
+    if (modelId && selectedModel) {
+      modelConfig = {
+        supports_vision: selectedModel.supports_vision ?? 1,
+        is_reasoning_model: selectedModel.is_reasoning_model ?? 0,
+        default_reasoning_effort: selectedModel.default_reasoning_effort ?? 'medium',
+        reasoning_type: selectedModel.reasoning_type ?? 'levels',
+      };
+    }
+    
     onSave({
       name: name.trim(),
       description: description.trim(),
@@ -117,6 +155,8 @@ export function AgentForm({ open, onOpenChange, agent, onSave }: AgentFormProps)
       presence_penalty: presencePenalty,
       tags: JSON.stringify(tags),
       is_published: isPublished ? 1 : 0,
+      enabled_tools: JSON.stringify(enabledTools),
+      ...modelConfig,
     });
   };
 
@@ -226,6 +266,52 @@ export function AgentForm({ open, onOpenChange, agent, onSave }: AgentFormProps)
                   </option>
                 ))}
               </select>
+              {selectedModel && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedModel.supports_vision === 1 && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-green-500/10 text-green-600 dark:text-green-400 px-2 py-0.5 rounded-md border border-green-500/20">
+                      📷 支持图片
+                    </span>
+                  )}
+                  {selectedModel.is_reasoning_model === 1 && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20">
+                      🧠 思考模型
+                      {selectedModel.reasoning_type === 'binary' ? ' (开关模式)' : ' (等级模式)'}
+                    </span>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                选择模型后会自动继承其图片支持和思考能力配置
+              </p>
+            </div>
+
+            {/* Tools Configuration */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">工具配置</Label>
+              <div className="p-3 rounded-lg bg-muted/30 border border-border/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <span className="text-base">🌐</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">联网搜索</p>
+                      <p className="text-xs text-muted-foreground">使用 Tavily 搜索实时信息</p>
+                    </div>
+                  </div>
+                  <Switch 
+                    checked={enabledTools.includes('web_search')} 
+                    onCheckedChange={() => toggleTool('web_search')}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground/60">
+                  启用后，智能体可以自动搜索网络获取最新信息
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                更多工具即将推出...
+              </p>
             </div>
 
             {/* Temperature */}

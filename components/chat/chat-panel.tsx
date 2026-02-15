@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, Square, FileText, Link2, Image as ImageIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import type { ReadingWidth } from '@/components/chat/reading-width-selector';
 import { widthOptions } from '@/components/chat/reading-width-selector';
 import { ReasoningEffortSelector } from '@/components/chat/reasoning-effort-selector';
@@ -35,6 +36,9 @@ export function ChatPanel({
   images,
   onImagesChange,
   supportsVision = false,
+  agentEnabledTools = [],
+  userEnabledTools = [],
+  onToggleTool,
 }: {
   input: string;
   setInput: (value: string) => void;
@@ -50,9 +54,13 @@ export function ChatPanel({
   images: ImageAttachment[];
   onImagesChange: (images: ImageAttachment[]) => void;
   supportsVision?: boolean;
+  agentEnabledTools?: string[];
+  userEnabledTools?: string[];
+  onToggleTool?: (toolName: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
   const [isFocused, setIsFocused] = useState(false);
   const isLoading = status === 'submitted' || status === 'streaming';
   
@@ -81,13 +89,19 @@ export function ChatPanel({
     Array.from(files).forEach(file => {
       // Check file type
       if (!file.type.startsWith('image/')) {
-        alert('请上传图片文件');
+        toast({
+          variant: 'destructive',
+          description: '请上传图片文件',
+        });
         return;
       }
 
       // Check file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
-        alert('图片大小不能超过 10MB');
+        toast({
+          variant: 'destructive',
+          description: '图片大小不能超过 10MB',
+        });
         return;
       }
 
@@ -220,6 +234,38 @@ export function ChatPanel({
                 reasoningType={reasoningType}
               />
             </div>
+          )}
+          
+          {/* Tools Toggle */}
+          {agentEnabledTools.length > 0 && onToggleTool && (
+            <>
+              <div className="w-px h-4 bg-border/50 ml-2" />
+              <div className="flex items-center gap-1.5 ml-2">
+                {agentEnabledTools.map(tool => {
+                  if (tool === 'web_search') {
+                    const isEnabled = userEnabledTools.includes(tool);
+                    return (
+                      <button
+                        key={tool}
+                        onClick={() => onToggleTool(tool)}
+                        disabled={disabled}
+                        className={cn(
+                          "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all duration-200",
+                          isEnabled 
+                            ? "bg-primary/15 text-primary hover:bg-primary/25" 
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                        )}
+                        title={isEnabled ? '点击关闭联网搜索' : '点击启用联网搜索'}
+                      >
+                        <span className="text-sm">🌐</span>
+                        <span>搜索</span>
+                      </button>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            </>
           )}
           
           <div className="ml-auto text-[11px] text-muted-foreground/50">

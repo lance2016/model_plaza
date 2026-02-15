@@ -33,6 +33,7 @@ interface AgentData {
   top_p: number;
   frequency_penalty: number;
   presence_penalty: number;
+  enabled_tools: string;
 }
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
@@ -48,6 +49,14 @@ function createAgentSession(agent: AgentData, models: Model[], defaultModelId: s
   const effort = model?.is_reasoning_model === 1
     ? (model.default_reasoning_effort || 'medium')
     : 'medium';
+  
+  // Parse enabled tools
+  let enabledTools: string[] = [];
+  try {
+    enabledTools = agent.enabled_tools ? JSON.parse(agent.enabled_tools) : [];
+  } catch {
+    enabledTools = [];
+  }
 
   return {
     id: createSessionId(),
@@ -65,6 +74,7 @@ function createAgentSession(agent: AgentData, models: Model[], defaultModelId: s
     agentName: agent.name,
     agentIcon: agent.icon,
     agentIconColor: agent.icon_color,
+    agentEnabledTools: enabledTools,
   };
 }
 
@@ -79,6 +89,8 @@ function ChatPageContent() {
 
   const { data: models = [] } = useSWR<Model[]>('/api/models', fetcher);
 
+  const initializedRef = useRef(false);
+  const loadedConvIdRef = useRef<string | null>(null);
   const sessionsRef = useRef(sessions);
   const activeSessionIdRef = useRef(activeSessionId);
   const streamingSessionIdsRef = useRef(streamingSessionIds);
@@ -94,8 +106,100 @@ function ChatPageContent() {
   const currentModel = models.find(m => m.id === activeSession?.selectedModelId);
   const isReasoningModel = currentModel?.is_reasoning_model === 1;
 
-  // Load default model + default agent
+  // Calculate streaming conversation IDs for sidebar display
+  const streamingConversationIds = new Set<string>();
+  sessions.forEach(session => {
+    if (streamingSessionIds.has(session.id) && session.conversationId) {
+      streamingConversationIds.add(session.conversationId);
+    }
+  });
+
+  // Initialize or load conversation (single effect to avoid race conditions)
+  // IMPORTANT: Do NOT call router.replace inside conversation loading —
+  // it can cause the Suspense boundary to remount this component, losing all state.
   useEffect(() => {
+    if (!models.length) return;
+
+    const convId = searchParams?.get('conversation');
+
+    if (convId) {
+      // Skip if we already loaded this conversation
+      if (convId === loadedConvIdRef.current) return;
+
+      // Load conversation from history
+      const loadConversation = async () => {
+        try {
+          const res = await fetch(`/api/conversations/${encodeURIComponent(convId)}`);
+          if (res.ok) {
+            const conv = await res.json();
+            const id = createSessionId();
+            const parsedMessages: UIMessage[] = JSON.parse(conv.messages);
+            const modelId = conv.model_id || defaultModelIdRef.current;
+            const model = modelsRef.current.find(m => m.id === modelId);
+            const effort = model?.is_reasoning_model === 1
+              ? (model.default_reasoning_effort || 'medium')
+              : 'medium';
+
+            // Load agent data if available
+            let agentData: Partial<Session> = {};
+            if (conv.agent_id) {
+              try {
+                const agentRes = await fetch(`/api/agents/${encodeURIComponent(conv.agent_id)}`);
+                if (agentRes.ok) {
+                  const agent = await agentRes.json();
+                  agentData = {
+                    agentId: agent.id,
+                    agentName: agent.name,
+                    agentIcon: agent.icon,
+                    agentIconColor: agent.icon_color,
+                    chatConfig: {
+                      systemPrompt: agent.system_prompt || '',
+                      temperature: agent.temperature ?? 0.7,
+                      maxTokens: agent.max_tokens ?? 4096,
+                      topP: agent.top_p ?? 1.0,
+                      frequencyPenalty: agent.frequency_penalty ?? 0,
+                      presencePenalty: agent.presence_penalty ?? 0,
+                    },
+                  };
+                }
+              } catch {}
+            }
+
+            const newSession: Session = {
+              id,
+              conversationId: convId,
+              selectedModelId: modelId,
+              reasoningEffort: effort,
+              chatConfig: agentData.chatConfig || { ...DEFAULT_CHAT_CONFIG },
+              initialMessages: parsedMessages,
+              ...(agentData.agentId ? {
+                agentId: agentData.agentId,
+                agentName: agentData.agentName,
+                agentIcon: agentData.agentIcon,
+                agentIconColor: agentData.agentIconColor,
+              } : {}),
+            };
+            setSessions(prev => [
+              ...prev.filter(s => streamingSessionIdsRef.current.has(s.id)),
+              newSession,
+            ]);
+            setActiveSessionId(id);
+            loadedConvIdRef.current = convId;
+            initializedRef.current = true;
+          }
+        } catch (e) {
+          console.error('Failed to load conversation:', e);
+        }
+      };
+
+      loadConversation();
+      return;
+    }
+
+    // Initialize with default agent (only once)
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     const init = async () => {
       let modelId = '';
       try {
@@ -111,11 +215,11 @@ function ChatPageContent() {
 
       // Check if agent is specified in URL
       const urlAgentId = searchParams?.get('agent');
-      
+
       // Load agent (either from URL or default)
       let agent: AgentData | null = null;
       try {
-        const agentUrl = urlAgentId 
+        const agentUrl = urlAgentId
           ? `/api/agents/${encodeURIComponent(urlAgentId)}`
           : '/api/agents?default=true';
         const agentRes = await fetch(agentUrl);
@@ -129,7 +233,7 @@ function ChatPageContent() {
         const session = createAgentSession(agent, modelsRef.current, modelId);
         setSessions([session]);
         setActiveSessionId(session.id);
-        
+
         // Clean URL if agent was specified
         if (urlAgentId) {
           router.replace('/chat');
@@ -139,76 +243,8 @@ function ChatPageContent() {
       }
     };
 
-    if (models.length > 0) init();
+    init();
   }, [models, router, searchParams]);
-
-  // Handle conversation loading from sidebar
-  useEffect(() => {
-    const convId = searchParams?.get('conversation');
-    if (!convId) return;
-
-    const loadConversation = async () => {
-      try {
-        const res = await fetch(`/api/conversations/${encodeURIComponent(convId)}`);
-        if (res.ok) {
-          const conv = await res.json();
-          const id = createSessionId();
-          const parsedMessages: UIMessage[] = JSON.parse(conv.messages);
-          const modelId = conv.model_id || defaultModelIdRef.current;
-          const model = modelsRef.current.find(m => m.id === modelId);
-          const effort = model?.is_reasoning_model === 1
-            ? (model.default_reasoning_effort || 'medium')
-            : 'medium';
-
-          // Load agent data if available
-          let agentData: Partial<Session> = {};
-          if (conv.agent_id) {
-            try {
-              const agentRes = await fetch(`/api/agents/${encodeURIComponent(conv.agent_id)}`);
-              if (agentRes.ok) {
-                const agent = await agentRes.json();
-                agentData = {
-                  agentId: agent.id,
-                  agentName: agent.name,
-                  agentIcon: agent.icon,
-                  agentIconColor: agent.icon_color,
-                  chatConfig: {
-                    systemPrompt: agent.system_prompt || '',
-                    temperature: agent.temperature ?? 0.7,
-                    maxTokens: agent.max_tokens ?? 4096,
-                    topP: agent.top_p ?? 1.0,
-                    frequencyPenalty: agent.frequency_penalty ?? 0,
-                    presencePenalty: agent.presence_penalty ?? 0,
-                  },
-                };
-              }
-            } catch {}
-          }
-
-          setSessions([{
-            id,
-            conversationId: convId,
-            selectedModelId: modelId,
-            reasoningEffort: effort,
-            chatConfig: agentData.chatConfig || { ...DEFAULT_CHAT_CONFIG },
-            initialMessages: parsedMessages,
-            ...(agentData.agentId ? {
-              agentId: agentData.agentId,
-              agentName: agentData.agentName,
-              agentIcon: agentData.agentIcon,
-              agentIconColor: agentData.agentIconColor,
-            } : {}),
-          }]);
-          setActiveSessionId(id);
-          router.replace('/chat');
-        }
-      } catch (e) {
-        console.error('Failed to load conversation:', e);
-      }
-    };
-
-    loadConversation();
-  }, [searchParams, router]);
 
   // Update reasoning effort when model changes
   useEffect(() => {
@@ -226,14 +262,18 @@ function ChatPageContent() {
     }
   }, [currentModel]);
 
-  // Cleanup unused sessions
+  // Cleanup unused sessions (with delay to avoid flicker)
   useEffect(() => {
-    setSessions(prev => {
-      const filtered = prev.filter(s =>
-        s.id === activeSessionIdRef.current || streamingSessionIdsRef.current.has(s.id)
-      );
-      return filtered.length > 0 ? filtered : prev;
-    });
+    const timer = setTimeout(() => {
+      setSessions(prev => {
+        const filtered = prev.filter(s =>
+          s.id === activeSessionIdRef.current || streamingSessionIdsRef.current.has(s.id)
+        );
+        return filtered.length > 0 ? filtered : prev;
+      });
+    }, 3000); // Delay 3 seconds to avoid flicker when streaming completes
+
+    return () => clearTimeout(timer);
   }, [activeSessionId, streamingSessionIds]);
 
   const handleReasoningEffortChange = useCallback((effort: string) => {
@@ -258,6 +298,7 @@ function ChatPageContent() {
       agentIconColor: currentSession.agentIconColor,
     }]);
     setActiveSessionId(id);
+    loadedConvIdRef.current = null;
   }, []);
 
   const handleConversationCreated = useCallback((sessionId: string, convId: string) => {
@@ -275,7 +316,19 @@ function ChatPageContent() {
     });
   }, []);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('[ChatPage] activeSessionId:', activeSessionId);
+    console.log('[ChatPage] sessions:', sessions.map(s => ({ id: s.id, conversationId: s.conversationId })));
+    console.log('[ChatPage] streamingSessionIds:', Array.from(streamingSessionIds));
+  }, [activeSessionId, sessions, streamingSessionIds]);
+
   if (!activeSessionId) return null;
+
+  // Background streaming sessions (excluding active one)
+  const backgroundStreamingSessions = sessions.filter(s => 
+    streamingSessionIds.has(s.id) && s.id !== activeSessionId && s.conversationId
+  );
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -288,6 +341,15 @@ function ChatPageContent() {
             size="xs" 
           />
           <span className="font-medium text-sm">{activeSession?.agentName}</span>
+          {backgroundStreamingSessions.length > 0 && (
+            <span className="text-xs text-muted-foreground ml-2 flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              {backgroundStreamingSessions.length} 个对话正在回复中
+            </span>
+          )}
         </div>
         <Button
           onClick={handleNewChat}
@@ -321,6 +383,7 @@ function ChatPageContent() {
             agentName={session.agentName}
             agentIcon={session.agentIcon}
             agentIconColor={session.agentIconColor}
+            agentEnabledTools={session.agentEnabledTools}
             onConversationCreated={handleConversationCreated}
             onStatusChange={handleStatusChange}
             onReasoningEffortChange={handleReasoningEffortChange}

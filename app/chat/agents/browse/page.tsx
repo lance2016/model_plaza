@@ -11,6 +11,7 @@ import { Search, Plus, Sparkles, ArrowLeft } from 'lucide-react';
 import { AgentCard } from '@/components/agents/agent-card';
 import { AgentForm, type AgentFormData } from '@/components/agents/agent-form';
 import { AgentDetail } from '@/components/agents/agent-detail';
+import { useToast } from '@/hooks/use-toast';
 import type { Agent } from '@/lib/db';
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
@@ -19,6 +20,7 @@ type FilterTab = 'all' | 'favorited';
 
 export default function AgentsBrowsePage() {
   const router = useRouter();
+  const { toast } = useToast();
   const { data: agents = [], mutate } = useSWR<Agent[]>('/api/agents', fetcher);
   const { data: settings, mutate: mutateSettings } = useSWR<Record<string, string>>('/api/settings', fetcher);
   const defaultAgentId = settings?.default_agent_id;
@@ -117,11 +119,19 @@ export default function AgentsBrowsePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
+        toast({
+          variant: 'success',
+          description: '更新成功',
+        });
       } else {
         await fetch('/api/agents', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
+        });
+        toast({
+          variant: 'success',
+          description: '创建成功',
         });
       }
       mutate();
@@ -129,8 +139,12 @@ export default function AgentsBrowsePage() {
       setEditingAgent(null);
     } catch (e) {
       console.error('Failed to save agent:', e);
+      toast({
+        variant: 'destructive',
+        description: '操作失败',
+      });
     }
-  }, [editingAgent, mutate]);
+  }, [editingAgent, mutate, toast]);
 
   const handleEdit = useCallback((agent: Agent) => {
     setEditingAgent(agent);
@@ -142,10 +156,18 @@ export default function AgentsBrowsePage() {
     try {
       await fetch(`/api/agents/${encodeURIComponent(agent.id)}`, { method: 'DELETE' });
       mutate();
+      toast({
+        variant: 'success',
+        description: '删除成功',
+      });
     } catch (e) {
       console.error('Failed to delete agent:', e);
+      toast({
+        variant: 'destructive',
+        description: '删除失败',
+      });
     }
-  }, [mutate]);
+  }, [mutate, toast]);
 
   const handleSetDefault = useCallback(async (agent: Agent) => {
     try {
@@ -155,10 +177,18 @@ export default function AgentsBrowsePage() {
         body: JSON.stringify({ key: 'default_agent_id', value: agent.id }),
       });
       mutateSettings();
+      toast({
+        variant: 'success',
+        description: '设置成功',
+      });
     } catch (e) {
       console.error('Failed to set default agent:', e);
+      toast({
+        variant: 'destructive',
+        description: '设置失败',
+      });
     }
-  }, [mutateSettings]);
+  }, [mutateSettings, toast]);
 
   const handleDetail = useCallback((agent: Agent) => {
     setDetailAgent(agent);

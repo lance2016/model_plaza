@@ -42,9 +42,15 @@ export default function ModelsPage() {
         body: JSON.stringify({ enabled: enabled ? 1 : 0 }),
       });
       mutate();
-      toast({ title: enabled ? '模型已启用' : '模型已禁用' });
+      toast({ 
+        variant: 'success',
+        description: enabled ? '已启用' : '已禁用' 
+      });
     } catch {
-      toast({ title: '操作失败', variant: 'destructive' });
+      toast({ 
+        variant: 'destructive',
+        description: '操作失败' 
+      });
     }
   };
 
@@ -53,9 +59,15 @@ export default function ModelsPage() {
     try {
       await fetch(`/api/models/${encodeURIComponent(id)}`, { method: 'DELETE' });
       mutate();
-      toast({ title: '模型已删除' });
+      toast({ 
+        variant: 'success',
+        description: '删除成功' 
+      });
     } catch {
-      toast({ title: '删除失败', variant: 'destructive' });
+      toast({ 
+        variant: 'destructive',
+        description: '删除失败' 
+      });
     }
   };
 
@@ -155,7 +167,10 @@ export default function ModelsPage() {
         onOpenChange={setFormOpen}
         onSave={() => {
           mutate();
-          toast({ title: editingModel ? '模型已更新' : '模型已添加' });
+          toast({ 
+            variant: 'success',
+            description: editingModel ? '更新成功' : '添加成功' 
+          });
         }}
         initialData={editingModel || undefined}
         isEdit={!!editingModel}

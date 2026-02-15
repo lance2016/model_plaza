@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { MessageSquarePlus } from 'lucide-react';
 import type { Session } from '@/lib/types';
 import { DEFAULT_CHAT_CONFIG } from '@/lib/types';
+import type { UIMessage } from 'ai';
 
 interface Model {
   id: string;
@@ -40,6 +41,8 @@ function ModelsPageContent() {
 
   const { data: models = [] } = useSWR<Model[]>('/api/models', fetcher);
 
+  const initializedRef = useRef(false);
+  const loadedConvIdRef = useRef<string | null>(null);
   const sessionsRef = useRef(sessions);
   const activeSessionIdRef = useRef(activeSessionId);
   const streamingSessionIdsRef = useRef(streamingSessionIds);
@@ -55,8 +58,69 @@ function ModelsPageContent() {
   const currentModel = models.find(m => m.id === activeSession?.selectedModelId);
   const isReasoningModel = currentModel?.is_reasoning_model === 1;
 
-  // Load default model or model from URL
+  // Calculate streaming conversation IDs for sidebar display
+  const streamingConversationIds = new Set<string>();
+  sessions.forEach(session => {
+    if (streamingSessionIds.has(session.id) && session.conversationId) {
+      streamingConversationIds.add(session.conversationId);
+    }
+  });
+
+  // Initialize or load conversation (single effect to avoid race conditions)
+  // IMPORTANT: Do NOT call router.replace inside conversation loading —
+  // it can cause the Suspense boundary to remount this component, losing all state.
   useEffect(() => {
+    if (!models.length) return;
+
+    const convId = searchParams?.get('conversation');
+
+    if (convId) {
+      // Skip if we already loaded this conversation
+      if (convId === loadedConvIdRef.current) return;
+
+      // Load conversation from history
+      const loadConversation = async () => {
+        try {
+          const res = await fetch(`/api/conversations/${encodeURIComponent(convId)}`);
+          if (res.ok) {
+            const conv = await res.json();
+            const id = createSessionId();
+            const parsedMessages: UIMessage[] = JSON.parse(conv.messages);
+            const modelId = conv.model_id || defaultModelIdRef.current;
+            const model = modelsRef.current.find(m => m.id === modelId);
+            const effort = model?.is_reasoning_model === 1
+              ? (model.default_reasoning_effort || 'medium')
+              : 'medium';
+
+            const newSession: Session = {
+              id,
+              conversationId: convId,
+              selectedModelId: modelId,
+              reasoningEffort: effort,
+              chatConfig: { ...DEFAULT_CHAT_CONFIG },
+              initialMessages: parsedMessages,
+            };
+            setSessions(prev => [
+              ...prev.filter(s => streamingSessionIdsRef.current.has(s.id)),
+              newSession,
+            ]);
+            setActiveSessionId(id);
+            loadedConvIdRef.current = convId;
+            initializedRef.current = true;
+          }
+        } catch (e) {
+          console.error('Failed to load conversation:', e);
+        }
+      };
+
+      loadConversation();
+      return;
+    }
+
+    // Initialize with default model (only once)
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     const init = async () => {
       let modelId = '';
       try {
@@ -93,7 +157,7 @@ function ModelsPageContent() {
       setActiveSessionId(id);
     };
 
-    if (models.length > 0) init();
+    init();
   }, [models, searchParams, router]);
 
   // Update reasoning effort when model changes
@@ -112,14 +176,18 @@ function ModelsPageContent() {
     }
   }, [currentModel]);
 
-  // Cleanup unused sessions
+  // Cleanup unused sessions (with delay to avoid flicker)
   useEffect(() => {
-    setSessions(prev => {
-      const filtered = prev.filter(s =>
-        s.id === activeSessionIdRef.current || streamingSessionIdsRef.current.has(s.id)
-      );
-      return filtered.length > 0 ? filtered : prev;
-    });
+    const timer = setTimeout(() => {
+      setSessions(prev => {
+        const filtered = prev.filter(s =>
+          s.id === activeSessionIdRef.current || streamingSessionIdsRef.current.has(s.id)
+        );
+        return filtered.length > 0 ? filtered : prev;
+      });
+    }, 3000); // Delay 3 seconds to avoid flicker when streaming completes
+
+    return () => clearTimeout(timer);
   }, [activeSessionId, streamingSessionIds]);
 
   const updateActiveSession = useCallback((updates: Partial<Session>) => {
@@ -151,6 +219,7 @@ function ModelsPageContent() {
       chatConfig: { ...DEFAULT_CHAT_CONFIG },
     }]);
     setActiveSessionId(id);
+    loadedConvIdRef.current = null;
   }, []);
 
   const handleConversationCreated = useCallback((sessionId: string, convId: string) => {
@@ -168,7 +237,19 @@ function ModelsPageContent() {
     });
   }, []);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('[ModelsPage] activeSessionId:', activeSessionId);
+    console.log('[ModelsPage] sessions:', sessions.map(s => ({ id: s.id, conversationId: s.conversationId })));
+    console.log('[ModelsPage] streamingSessionIds:', Array.from(streamingSessionIds));
+  }, [activeSessionId, sessions, streamingSessionIds]);
+
   if (!activeSessionId) return null;
+
+  // Background streaming sessions (excluding active one)
+  const backgroundStreamingSessions = sessions.filter(s => 
+    streamingSessionIds.has(s.id) && s.id !== activeSessionId && s.conversationId
+  );
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -178,6 +259,15 @@ function ModelsPageContent() {
           value={activeSession?.selectedModelId || ''}
           onChange={handleModelChange}
         />
+        {backgroundStreamingSessions.length > 0 && (
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            {backgroundStreamingSessions.length} 个对话正在回复中
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <Button
             onClick={handleNewChat}

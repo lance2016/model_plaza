@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Trash2, AlertCircle, CheckCircle2, Globe } from 'lucide-react';
+import { Trash2, Globe, MapPin } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 
 interface Model {
   id: string;
@@ -33,13 +33,37 @@ const fetcher = (url: string) => fetch(url).then(r => r.json());
 export default function GeneralSettingsPage() {
   const { data: models } = useSWR<Model[]>('/api/models?enabled=true', fetcher);
   const { data: settings } = useSWR<Record<string, string>>('/api/settings', fetcher);
+  const { toast } = useToast();
   const [defaultModelId, setDefaultModelId] = useState<string>('');
   const [globalPromptEnabled, setGlobalPromptEnabled] = useState(false);
   const [globalPrompt, setGlobalPrompt] = useState('');
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [showClearDialog, setShowClearDialog] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<string>('');
+
+  // Load location settings
+  useEffect(() => {
+    const enabled = localStorage.getItem('location_sharing_enabled') === 'true';
+    setLocationEnabled(enabled);
+    
+    if (enabled) {
+      const cached = localStorage.getItem('user_location');
+      if (cached) {
+        try {
+          const loc = JSON.parse(cached);
+          if (loc.city && loc.country) {
+            setCurrentLocation(`${loc.country} ${loc.city}`);
+          } else {
+            setCurrentLocation(`${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`);
+          }
+        } catch (e) {
+          console.error('Failed to parse location:', e);
+        }
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (settings?.default_model_id) {
@@ -67,12 +91,16 @@ export default function GeneralSettingsPage() {
       if (!res.ok) throw new Error('Failed to save settings');
 
       mutate('/api/settings');
-      setMessage({ type: 'success', text: '默认模型已保存' });
-      setTimeout(() => setMessage(null), 3000);
+      toast({
+        variant: 'success',
+        description: '保存成功',
+      });
     } catch (error) {
       console.error('Failed to save default model:', error);
-      setMessage({ type: 'error', text: '保存失败' });
-      setTimeout(() => setMessage(null), 3000);
+      toast({
+        variant: 'destructive',
+        description: '保存失败',
+      });
     }
   };
 
@@ -91,12 +119,16 @@ export default function GeneralSettingsPage() {
         }),
       ]);
       mutate('/api/settings');
-      setMessage({ type: 'success', text: '全局提示词已保存' });
-      setTimeout(() => setMessage(null), 3000);
+      toast({
+        variant: 'success',
+        description: '保存成功',
+      });
     } catch (error) {
       console.error('Failed to save global prompt:', error);
-      setMessage({ type: 'error', text: '保存失败' });
-      setTimeout(() => setMessage(null), 3000);
+      toast({
+        variant: 'destructive',
+        description: '保存失败',
+      });
     }
   };
 
@@ -108,12 +140,16 @@ export default function GeneralSettingsPage() {
         body: JSON.stringify({ key: 'tavily_api_key', value: tavilyApiKey }),
       });
       mutate('/api/settings');
-      setMessage({ type: 'success', text: 'Tavily API Key 已保存' });
-      setTimeout(() => setMessage(null), 3000);
+      toast({
+        variant: 'success',
+        description: '保存成功',
+      });
     } catch (error) {
       console.error('Failed to save Tavily key:', error);
-      setMessage({ type: 'error', text: '保存失败' });
-      setTimeout(() => setMessage(null), 3000);
+      toast({
+        variant: 'destructive',
+        description: '保存失败',
+      });
     }
   };
 
@@ -130,30 +166,94 @@ export default function GeneralSettingsPage() {
 
       mutate('/api/conversations');
       setShowClearDialog(false);
-      setMessage({ type: 'success', text: '所有聊天记录已清空' });
-      setTimeout(() => setMessage(null), 3000);
+      toast({
+        variant: 'success',
+        description: '聊天记录已清空',
+      });
     } catch (error) {
       console.error('Failed to clear conversations:', error);
-      setMessage({ type: 'error', text: '清空失败' });
-      setTimeout(() => setMessage(null), 3000);
+      toast({
+        variant: 'destructive',
+        description: '操作失败',
+      });
     } finally {
       setIsClearing(false);
     }
   };
 
+  const handleLocationToggle = async (enabled: boolean) => {
+    setLocationEnabled(enabled);
+    localStorage.setItem('location_sharing_enabled', String(enabled));
+    
+    if (enabled) {
+      // Request location permission
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const loc = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              timestamp: Date.now(),
+            };
+            
+            // Try to reverse geocode
+            try {
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${loc.latitude}&lon=${loc.longitude}&format=json&accept-language=zh-CN`
+              );
+              if (res.ok) {
+                const data = await res.json();
+                loc.city = data.address?.city || data.address?.town || data.address?.village;
+                loc.country = data.address?.country;
+                
+                if (loc.city && loc.country) {
+                  setCurrentLocation(`${loc.country} ${loc.city}`);
+                } else {
+                  setCurrentLocation(`${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`);
+                }
+              }
+            } catch (e) {
+              console.error('Failed to reverse geocode:', e);
+              setCurrentLocation(`${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`);
+            }
+            
+            localStorage.setItem('user_location', JSON.stringify(loc));
+            toast({
+              variant: 'success',
+              description: '位置获取成功',
+            });
+          },
+          (error) => {
+            console.error('Location permission denied:', error);
+            setLocationEnabled(false);
+            localStorage.setItem('location_sharing_enabled', 'false');
+            toast({
+              variant: 'destructive',
+              description: '位置权限被拒绝',
+            });
+          },
+          { timeout: 5000 }
+        );
+      } else {
+        toast({
+          variant: 'destructive',
+          description: '浏览器不支持定位',
+        });
+        setLocationEnabled(false);
+        localStorage.setItem('location_sharing_enabled', 'false');
+      }
+    } else {
+      setCurrentLocation('');
+      localStorage.removeItem('user_location');
+      toast({
+        variant: 'success',
+        description: '已禁用位置共享',
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {message && (
-        <Alert variant={message.type === 'error' ? 'destructive' : 'default'}>
-          {message.type === 'success' ? (
-            <CheckCircle2 className="h-4 w-4" />
-          ) : (
-            <AlertCircle className="h-4 w-4" />
-          )}
-          <AlertDescription>{message.text}</AlertDescription>
-        </Alert>
-      )}
-
       <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-base font-semibold tracking-tight">默认模型</CardTitle>
@@ -248,6 +348,38 @@ export default function GeneralSettingsPage() {
           <Button onClick={handleSaveTavilyKey}>
             保存
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-primary" />
+              <div>
+                <CardTitle className="text-base font-semibold tracking-tight">位置共享</CardTitle>
+                <CardDescription className="text-muted-foreground/70">
+                  允许 AI 获取您的位置信息以提供更精准的建议
+                </CardDescription>
+              </div>
+            </div>
+            <Switch
+              checked={locationEnabled}
+              onCheckedChange={handleLocationToggle}
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {currentLocation && (
+              <div className="text-sm text-muted-foreground">
+                当前位置: <span className="font-medium text-foreground">{currentLocation}</span>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground/60 leading-relaxed">
+              启用后，AI 将能够获取您的地理位置(经纬度、城市、国家)以提供本地化建议。位置信息会缓存 1 小时。您可以随时禁用此功能。
+            </p>
+          </div>
         </CardContent>
       </Card>
 

@@ -33,7 +33,8 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ value, onChange }: ModelSelectorProps) {
-  const { data: models = [] } = useSWR<Model[]>('/api/models', fetcher);
+  // Only fetch enabled models from enabled providers
+  const { data: models = [] } = useSWR<Model[]>('/api/models?enabled=true', fetcher);
 
   // Group models by provider, handle undefined providers
   const modelsByProvider: ModelsByProvider = models.reduce((acc, model) => {

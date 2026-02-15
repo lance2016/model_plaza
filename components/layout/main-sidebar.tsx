@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import useSWR from 'swr';
-import { Star, MessageSquare, Sparkles, Settings, Search, X, Trash2 } from 'lucide-react';
+import { Star, MessageSquare, Sparkles, Settings, Search, X, Trash2, PanelLeftClose } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Input } from '@/components/ui/input';
@@ -23,14 +23,16 @@ const fetcher = (url: string) => fetch(url).then(r => r.json());
 
 interface MainSidebarProps {
   currentConversationId?: string;
-  onSelectConversation?: (id: string) => void;
+  onSelectConversation?: (id: string, hasAgent: boolean) => void;
   defaultAgentName?: string;
+  onCollapse?: () => void;
 }
 
-export function MainSidebar({ 
-  currentConversationId, 
+export function MainSidebar({
+  currentConversationId,
   onSelectConversation,
-  defaultAgentName = '默认智能体'
+  defaultAgentName = '默认智能体',
+  onCollapse
 }: MainSidebarProps) {
   const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,15 +77,27 @@ export function MainSidebar({
   const displayConversations = searchQuery.trim() ? searchResults : conversations.slice(0, 10);
 
   return (
-    <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background flex flex-col">
+    <div className="w-full h-full border-r border-border/50 bg-background flex flex-col">
       {/* Header with Logo */}
       <div className="p-4 pb-3">
-        <Link href="/chat" className="flex items-center gap-2 mb-4">
-          <div className="h-8 w-8 rounded-xl gradient-accent flex items-center justify-center shadow-sm">
-            <Star className="h-4 w-4 text-white" />
-          </div>
-          <span className="font-bold text-lg">LLM Plaza</span>
-        </Link>
+        <div className="flex items-center justify-between mb-4">
+          <Link href="/chat" className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-xl gradient-accent flex items-center justify-center shadow-sm">
+              <Star className="h-4 w-4 text-white" />
+            </div>
+            <span className="font-bold text-lg">LLM Plaza</span>
+          </Link>
+          {onCollapse && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={onCollapse}
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Main Navigation Buttons */}
@@ -107,7 +121,7 @@ export function MainSidebar({
             className={cn(
               'w-full h-10 rounded-lg flex items-center gap-3 px-3 text-sm font-medium transition-all duration-200',
               pathname?.startsWith('/chat/models')
-                ? 'bg-accent text-accent-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-foreground hover:bg-accent'
             )}
           >
@@ -121,7 +135,7 @@ export function MainSidebar({
             className={cn(
               'w-full h-10 rounded-lg flex items-center gap-3 px-3 text-sm font-medium transition-all duration-200',
               pathname?.startsWith('/chat/agents/browse')
-                ? 'bg-accent text-accent-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-foreground hover:bg-accent'
             )}
           >
@@ -182,7 +196,7 @@ export function MainSidebar({
               return (
                 <div
                   key={conv.id}
-                  onClick={() => onSelectConversation?.(conv.id)}
+                  onClick={() => onSelectConversation?.(conv.id, !!conv.agent_id)}
                   className={cn(
                     'group flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm cursor-pointer transition-all duration-200',
                     currentConversationId === conv.id
@@ -215,12 +229,12 @@ export function MainSidebar({
       </div>
 
       {/* Footer Actions */}
-      <div className="p-3 border-t border-border/50">
-        <div className="flex items-center gap-2">
+      <div className="p-3 pt-2 border-t border-border/50">
+        <div className="flex items-center gap-1.5">
           <Link href="/settings/general" className="flex-1">
             <button
               className={cn(
-                'w-full h-9 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all duration-200',
+                'w-full h-8 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all duration-200',
                 pathname?.startsWith('/settings')
                   ? 'bg-accent text-accent-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -230,9 +244,7 @@ export function MainSidebar({
               <span>设置</span>
             </button>
           </Link>
-          <div className="flex-shrink-0">
-            <ThemeToggle />
-          </div>
+          <ThemeToggle />
         </div>
       </div>
     </div>

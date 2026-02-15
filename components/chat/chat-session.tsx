@@ -28,6 +28,7 @@ interface ChatSessionProps {
   agentName?: string;
   agentIcon?: string;
   agentIconColor?: string;
+  agentEnabledTools?: string[]; // Tools enabled by agent
   onConversationCreated: (sessionId: string, conversationId: string) => void;
   onStatusChange: (sessionId: string, status: string) => void;
   onReasoningEffortChange: (effort: string) => void;
@@ -49,6 +50,7 @@ export function ChatSession({
   agentName,
   agentIcon,
   agentIconColor,
+  agentEnabledTools = [],
   onConversationCreated,
   onStatusChange,
   onReasoningEffortChange,
@@ -56,6 +58,87 @@ export function ChatSession({
   const [input, setInput] = useState('');
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
+  
+  // User location
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; city?: string; country?: string } | null>(null);
+  
+  // Load location from localStorage or request permission
+  useEffect(() => {
+    const loadLocation = async () => {
+      // Check if location sharing is enabled
+      const locationEnabled = localStorage.getItem('location_sharing_enabled');
+      if (locationEnabled === 'false') return;
+      
+      // Try to load cached location
+      const cached = localStorage.getItem('user_location');
+      if (cached) {
+        try {
+          const loc = JSON.parse(cached);
+          // Check if cache is less than 1 hour old
+          if (loc.timestamp && Date.now() - loc.timestamp < 3600000) {
+            setUserLocation(loc);
+            return;
+          }
+        } catch (e) {
+          console.error('Failed to parse cached location:', e);
+        }
+      }
+      
+      // Request new location
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const loc = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              timestamp: Date.now(),
+            };
+            
+            // Try to reverse geocode to get city/country
+            try {
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${loc.latitude}&lon=${loc.longitude}&format=json&accept-language=zh-CN`
+              );
+              if (res.ok) {
+                const data = await res.json();
+                loc.city = data.address?.city || data.address?.town || data.address?.village;
+                loc.country = data.address?.country;
+              }
+            } catch (e) {
+              console.error('Failed to reverse geocode:', e);
+            }
+            
+            setUserLocation(loc);
+            localStorage.setItem('user_location', JSON.stringify(loc));
+            localStorage.setItem('location_sharing_enabled', 'true');
+          },
+          (error) => {
+            console.log('Location permission denied or unavailable:', error);
+            localStorage.setItem('location_sharing_enabled', 'false');
+          },
+          { timeout: 5000 }
+        );
+      }
+    };
+    
+    loadLocation();
+  }, []);
+  
+  // User tool preferences - load from localStorage, default to agent config
+  const [userEnabledTools, setUserEnabledTools] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return agentEnabledTools;
+    try {
+      const saved = localStorage.getItem('user_tool_preferences');
+      if (saved) {
+        const prefs = JSON.parse(saved);
+        // Filter by agent's enabled tools
+        return agentEnabledTools.filter(tool => prefs[tool] !== false);
+      }
+    } catch (e) {
+      console.error('Failed to load tool preferences:', e);
+    }
+    return agentEnabledTools;
+  });
 
   // Refs for latest values to avoid stale closures
   const selectedModelIdRef = useRef(selectedModelId);
@@ -71,6 +154,33 @@ export function ChatSession({
 
   const agentIdRef = useRef(agentId);
   agentIdRef.current = agentId;
+  
+  const userEnabledToolsRef = useRef(userEnabledTools);
+  userEnabledToolsRef.current = userEnabledTools;
+  
+  const userLocationRef = useRef(userLocation);
+  userLocationRef.current = userLocation;
+  
+  // Save tool preferences to localStorage
+  const handleToggleTool = useCallback((toolName: string) => {
+    setUserEnabledTools(prev => {
+      const newTools = prev.includes(toolName)
+        ? prev.filter(t => t !== toolName)
+        : [...prev, toolName];
+      
+      // Save to localStorage
+      try {
+        const saved = localStorage.getItem('user_tool_preferences');
+        const prefs = saved ? JSON.parse(saved) : {};
+        prefs[toolName] = newTools.includes(toolName);
+        localStorage.setItem('user_tool_preferences', JSON.stringify(prefs));
+      } catch (e) {
+        console.error('Failed to save tool preferences:', e);
+      }
+      
+      return newTools;
+    });
+  }, []);
 
   const [transport] = useState(() => new DefaultChatTransport({
     api: '/api/chat',
@@ -79,6 +189,8 @@ export function ChatSession({
       reasoningEffort: reasoningEffortRef.current,
       chatConfig: chatConfigRef.current,
       agentId: agentIdRef.current,
+      enabledTools: userEnabledToolsRef.current,
+      userLocation: userLocationRef.current,
     }),
   }));
 
@@ -172,8 +284,21 @@ export function ChatSession({
     }
   }, [input, images, status, sendMessage, sessionId, agentId]);
 
+  // Log for debugging
+  useEffect(() => {
+    console.log(`[ChatSession ${sessionId}] isActive:`, isActive, 'status:', status, 'messages:', messages.length);
+  }, [isActive, status, messages.length, sessionId]);
+
   return (
-    <div className={isActive ? 'flex-1 flex flex-col overflow-hidden' : 'hidden'}>
+    <div 
+      className="flex-1 flex flex-col overflow-hidden absolute inset-0"
+      style={{
+        zIndex: isActive ? 1 : 0,
+        opacity: isActive ? 1 : 0,
+        pointerEvents: isActive ? 'auto' : 'none',
+        transition: 'opacity 0.15s ease-in-out',
+      }}
+    >
       {error && (
         <Alert variant="destructive" className="m-4 mb-0 border-destructive/50 bg-destructive/10">
           <AlertCircle className="h-4 w-4" />
@@ -200,6 +325,9 @@ export function ChatSession({
         images={images}
         onImagesChange={setImages}
         supportsVision={supportsVision}
+        agentEnabledTools={agentEnabledTools}
+        userEnabledTools={userEnabledTools}
+        onToggleTool={handleToggleTool}
       />
     </div>
   );

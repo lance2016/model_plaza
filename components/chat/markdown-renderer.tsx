@@ -4,8 +4,10 @@ import { useState, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Check, Copy } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 function CopyButton({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -37,24 +39,38 @@ function CopyButton({ code }: { code: string }) {
 }
 
 function CodeBlock({ language, code }: { language: string; code: string }) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  
   return (
-    <div className="not-prose my-3 rounded-lg overflow-hidden border border-border/50 bg-[#282c34]">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#21252b] border-b border-border/30">
-        <span className="text-[11px] text-muted-foreground/60 font-mono">{language || 'text'}</span>
+    <div className="not-prose my-3 rounded-lg overflow-hidden border border-border/50 bg-card shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border/30">
+        <span className="text-xs text-muted-foreground font-mono font-medium">{language || 'text'}</span>
         <CopyButton code={code} />
       </div>
       <SyntaxHighlighter
-        style={oneDark}
+        style={isDark ? vscDarkPlus : oneLight}
         language={language || 'text'}
         PreTag="div"
         customStyle={{
           margin: 0,
-          padding: '1rem',
+          padding: '1.25rem',
           background: 'transparent',
-          fontSize: '13px',
-          lineHeight: '1.6',
+          fontSize: '14px',
+          lineHeight: '1.7',
         }}
-        codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace' } }}
+        codeTagProps={{ 
+          style: { 
+            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "Courier New", monospace',
+            fontWeight: '400',
+            background: 'transparent'
+          } 
+        }}
+        lineProps={{
+          style: { background: 'transparent' }
+        }}
+        wrapLines={false}
+        showLineNumbers={false}
       >
         {code}
       </SyntaxHighlighter>
@@ -64,7 +80,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
 
 function InlineCode({ children }: { children: ReactNode }) {
   return (
-    <code className="px-1.5 py-0.5 rounded-md bg-muted text-[0.85em] font-mono text-foreground/90 border border-border/30">
+    <code className="px-1.5 py-0.5 mx-0.5 rounded-md bg-muted text-[0.875em] font-mono text-foreground border border-border/40 font-medium">
       {children}
     </code>
   );

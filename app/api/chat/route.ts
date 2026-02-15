@@ -11,6 +11,42 @@ import { getLanguageModel } from '@/lib/ai';
 
 export const maxDuration = 60;
 
+// Build system context with current time and other info
+function buildSystemContext(userLocation?: { latitude: number; longitude: number; city?: string; country?: string }): string {
+  const now = new Date();
+  
+  // Format time in user-friendly way
+  const dateStr = now.toLocaleDateString('zh-CN', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    weekday: 'long'
+  });
+  
+  const timeStr = now.toLocaleTimeString('zh-CN', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false
+  });
+  
+  let context = `[系统信息]\n当前时间: ${dateStr} ${timeStr}`;
+  
+  // Add timezone
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  context += `\n时区: ${timezone}`;
+  
+  // Add location if provided
+  if (userLocation) {
+    context += `\n用户位置: `;
+    if (userLocation.city && userLocation.country) {
+      context += `${userLocation.country} ${userLocation.city}`;
+    }
+    context += `\n经纬度: (${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)})`;
+  }
+  
+  return context;
+}
+
 // Convert UIMessage to CoreMessage format, extracting file parts as images
 function convertUIMessagesToCoreMessages(uiMessages: UIMessage[]): CoreMessage[] {
   return uiMessages.map((msg) => {
@@ -81,6 +117,8 @@ export async function POST(req: Request) {
       reasoningEffort,
       chatConfig,
       agentId,
+      enabledTools,
+      userLocation,
     }: {
       messages: UIMessage[];
       modelId: string;
@@ -94,6 +132,13 @@ export async function POST(req: Request) {
         presencePenalty?: number;
       };
       agentId?: string;
+      enabledTools?: string[]; // Array of enabled tool names
+      userLocation?: {
+        latitude: number;
+        longitude: number;
+        city?: string;
+        country?: string;
+      };
     } = await req.json();
 
     console.log('=== Chat API Request ===');
@@ -140,19 +185,35 @@ export async function POST(req: Request) {
     // Log messages safely (with image placeholders)
     console.log('Core messages:', coreMessages.map(logMessageSafely));
 
-    // Build system prompt: merge global prompt + per-chat prompt
+    // Build system prompt: merge global prompt + per-chat prompt + system context
     const globalPromptEnabled = getSetting('global_system_prompt_enabled') === 'true';
     const globalPrompt = globalPromptEnabled ? (getSetting('global_system_prompt') || '') : '';
     const chatPrompt = chatConfig?.systemPrompt || '';
+    
+    // Build system context (time, location, etc)
+    const systemContext = buildSystemContext(userLocation);
 
     const finalMessages: CoreMessage[] = [];
-    if (globalPrompt || chatPrompt) {
+    if (globalPrompt || chatPrompt || systemContext) {
       let systemContent = '';
-      if (globalPrompt && chatPrompt) {
-        systemContent = `${chatPrompt}\n\n---\n以下是用户自定义的全局提示词，优先级最高，如与上述内容冲突请以此为准：\n${globalPrompt}`;
-      } else {
-        systemContent = globalPrompt || chatPrompt;
+      
+      // Add system context first
+      if (systemContext) {
+        systemContent = systemContext;
       }
+      
+      // Add chat prompt
+      if (chatPrompt) {
+        systemContent += systemContent ? '\n\n' : '';
+        systemContent += chatPrompt;
+      }
+      
+      // Add global prompt (highest priority)
+      if (globalPrompt) {
+        systemContent += systemContent ? '\n\n---\n以下是用户自定义的全局提示词，优先级最高，如与上述内容冲突请以此为准：\n' : '';
+        systemContent += globalPrompt;
+      }
+      
       finalMessages.push({
         role: 'system',
         content: systemContent,
@@ -204,8 +265,8 @@ export async function POST(req: Request) {
             return { error: '搜索请求失败' };
           }
         },
-      }),
-    } : undefined;
+      });
+    }
 
     // Build streamText options with custom config or model defaults
     const streamOptions: Record<string, unknown> = {
@@ -218,7 +279,7 @@ export async function POST(req: Request) {
       presencePenalty: chatConfig?.presencePenalty,
     };
 
-    if (tools) {
+    if (Object.keys(tools).length > 0) {
       streamOptions.tools = tools;
       streamOptions.stopWhen = stepCountIs(3);
     }
@@ -238,7 +299,7 @@ export async function POST(req: Request) {
       hasGlobalPrompt: !!globalPrompt,
       temperature: streamOptions.temperature,
       maxTokens: streamOptions.maxTokens,
-      hasTools: !!tools,
+      hasTools: Object.keys(tools).length > 0,
     });
 
     const result = streamText(streamOptions as never);

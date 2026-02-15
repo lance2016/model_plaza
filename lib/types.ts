@@ -12,6 +12,7 @@ export interface Session {
   agentName?: string;
   agentIcon?: string;
   agentIconColor?: string;
+  agentEnabledTools?: string[];
 }
 
 export const DEFAULT_CHAT_CONFIG: ChatConfig = {

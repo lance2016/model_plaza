@@ -59,6 +59,11 @@ export interface Agent {
   is_favorited: number;
   use_count: number;
   sort_order: number;
+  supports_vision: number;
+  is_reasoning_model: number;
+  default_reasoning_effort: string;
+  reasoning_type: string;
+  enabled_tools: string; // JSON array of tool names, e.g. ["web_search"]
   created_at: string;
   updated_at: string;
 }
@@ -176,6 +181,11 @@ export function getDb(): Database.Database {
       is_favorited INTEGER DEFAULT 0,
       use_count INTEGER DEFAULT 0,
       sort_order INTEGER DEFAULT 0,
+      supports_vision INTEGER DEFAULT 1,
+      is_reasoning_model INTEGER DEFAULT 0,
+      default_reasoning_effort TEXT DEFAULT 'medium',
+      reasoning_type TEXT DEFAULT 'levels',
+      enabled_tools TEXT DEFAULT '["web_search"]',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -195,6 +205,23 @@ export function getDb(): Database.Database {
   const modelColumns = db.prepare("PRAGMA table_info(models)").all() as { name: string }[];
   if (!modelColumns.some(c => c.name === 'supports_vision')) {
     db.exec("ALTER TABLE models ADD COLUMN supports_vision INTEGER DEFAULT 1");
+  }
+
+  const agentColumns = db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];
+  if (!agentColumns.some(c => c.name === 'supports_vision')) {
+    db.exec("ALTER TABLE agents ADD COLUMN supports_vision INTEGER DEFAULT 1");
+  }
+  if (!agentColumns.some(c => c.name === 'is_reasoning_model')) {
+    db.exec("ALTER TABLE agents ADD COLUMN is_reasoning_model INTEGER DEFAULT 0");
+  }
+  if (!agentColumns.some(c => c.name === 'default_reasoning_effort')) {
+    db.exec("ALTER TABLE agents ADD COLUMN default_reasoning_effort TEXT DEFAULT 'medium'");
+  }
+  if (!agentColumns.some(c => c.name === 'reasoning_type')) {
+    db.exec("ALTER TABLE agents ADD COLUMN reasoning_type TEXT DEFAULT 'levels'");
+  }
+  if (!agentColumns.some(c => c.name === 'enabled_tools')) {
+    db.exec('ALTER TABLE agents ADD COLUMN enabled_tools TEXT DEFAULT \'["web_search"]\'');
   }
 
   const convColumns = db.prepare("PRAGMA table_info(conversations)").all() as { name: string }[];
@@ -506,10 +533,15 @@ export function createAgent(data: {
   presence_penalty?: number;
   tags?: string;
   is_published?: number;
+  supports_vision?: number;
+  is_reasoning_model?: number;
+  default_reasoning_effort?: string;
+  reasoning_type?: string;
+  enabled_tools?: string;
 }) {
   getDb().prepare(
-    `INSERT INTO agents (id, name, description, icon, icon_color, system_prompt, model_id, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, tags, is_published)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO agents (id, name, description, icon, icon_color, system_prompt, model_id, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, tags, is_published, supports_vision, is_reasoning_model, default_reasoning_effort, reasoning_type, enabled_tools)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     data.id,
     data.name,
@@ -524,7 +556,12 @@ export function createAgent(data: {
     data.frequency_penalty ?? 0,
     data.presence_penalty ?? 0,
     data.tags ?? '[]',
-    data.is_published ?? 1
+    data.is_published ?? 1,
+    data.supports_vision ?? 1,
+    data.is_reasoning_model ?? 0,
+    data.default_reasoning_effort ?? 'medium',
+    data.reasoning_type ?? 'levels',
+    data.enabled_tools ?? '["web_search"]'
   );
 }
 
@@ -544,6 +581,11 @@ export function updateAgent(id: string, data: Partial<{
   is_published: number;
   is_favorited: number;
   sort_order: number;
+  supports_vision: number;
+  is_reasoning_model: number;
+  default_reasoning_effort: string;
+  reasoning_type: string;
+  enabled_tools: string;
 }>) {
   const sets: string[] = ['updated_at = CURRENT_TIMESTAMP'];
   const values: unknown[] = [];
@@ -562,6 +604,11 @@ export function updateAgent(id: string, data: Partial<{
   if (data.is_published !== undefined) { sets.push('is_published = ?'); values.push(data.is_published); }
   if (data.is_favorited !== undefined) { sets.push('is_favorited = ?'); values.push(data.is_favorited); }
   if (data.sort_order !== undefined) { sets.push('sort_order = ?'); values.push(data.sort_order); }
+  if (data.supports_vision !== undefined) { sets.push('supports_vision = ?'); values.push(data.supports_vision); }
+  if (data.is_reasoning_model !== undefined) { sets.push('is_reasoning_model = ?'); values.push(data.is_reasoning_model); }
+  if (data.default_reasoning_effort !== undefined) { sets.push('default_reasoning_effort = ?'); values.push(data.default_reasoning_effort); }
+  if (data.reasoning_type !== undefined) { sets.push('reasoning_type = ?'); values.push(data.reasoning_type); }
+  if (data.enabled_tools !== undefined) { sets.push('enabled_tools = ?'); values.push(data.enabled_tools); }
   if (sets.length <= 1) return;
   values.push(id);
   getDb().prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...values);
