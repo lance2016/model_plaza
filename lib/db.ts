@@ -273,7 +273,7 @@ function seedData(database: Database.Database) {
 
 function seedAgents(database: Database.Database) {
   const insertAgent = database.prepare(
-    'INSERT OR IGNORE INTO agents (id, name, description, icon, icon_color, system_prompt, tags, is_preset, is_published, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)'
+    'INSERT OR REPLACE INTO agents (id, name, description, icon, icon_color, system_prompt, tags, is_preset, is_published, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)'
   );
 
   const tx = database.transaction(() => {

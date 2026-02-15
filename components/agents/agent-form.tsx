@@ -130,16 +130,13 @@ export function AgentForm({ open, onOpenChange, agent, onSave }: AgentFormProps)
   const handleSubmit = () => {
     if (!name.trim() || !systemPrompt.trim()) return;
     
-    // Get model config if model is selected
-    let modelConfig = {};
-    if (modelId && selectedModel) {
-      modelConfig = {
-        supports_vision: selectedModel.supports_vision ?? 1,
-        is_reasoning_model: selectedModel.is_reasoning_model ?? 0,
-        default_reasoning_effort: selectedModel.default_reasoning_effort ?? 'medium',
-        reasoning_type: selectedModel.reasoning_type ?? 'levels',
-      };
-    }
+    // Get model config
+    const modelConfig = {
+      supports_vision: selectedModel?.supports_vision ?? 0,
+      is_reasoning_model: selectedModel?.is_reasoning_model ?? 0,
+      default_reasoning_effort: selectedModel?.default_reasoning_effort ?? 'medium',
+      reasoning_type: selectedModel?.reasoning_type ?? 'levels',
+    };
     
     onSave({
       name: name.trim(),

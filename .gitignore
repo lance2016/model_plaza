@@ -36,14 +36,17 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database
-data/*.db
-data/*.db-wal
-data/*.db-shm
+# Database files (SQLite)
+# These contain user data, API keys, and should NOT be committed
+*.db
+*.db-wal
+*.db-shm
+data/
+!data/.gitkeep
 
 # IDE
-.vscode
-.idea
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
@@ -51,6 +54,18 @@ data/*.db-shm
 # OS
 .DS_Store
 Thumbs.db
+*.log
 
-# Cursor
-.claude
+# Cursor AI
+.cursor/
+.claude/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# User-uploaded files (if any)
+uploads/
+temp/

@@ -62,6 +62,16 @@ export function ChatSession({
   // User location
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; city?: string; country?: string } | null>(null);
   
+  // Time injection setting
+  const timeEnabledRef = useRef<boolean>(true);
+  
+  // Load time injection setting
+  useEffect(() => {
+    const stored = localStorage.getItem('time_injection_enabled');
+    const enabled = stored === null ? true : stored === 'true';
+    timeEnabledRef.current = enabled;
+  }, []);
+  
   // Load location from localStorage or request permission
   useEffect(() => {
     const loadLocation = async () => {
@@ -88,7 +98,13 @@ export function ChatSession({
       if ('geolocation' in navigator) {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
-            const loc = {
+            const loc: {
+              latitude: number;
+              longitude: number;
+              timestamp: number;
+              city?: string;
+              country?: string;
+            } = {
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
               timestamp: Date.now(),
@@ -191,6 +207,7 @@ export function ChatSession({
       agentId: agentIdRef.current,
       enabledTools: userEnabledToolsRef.current,
       userLocation: userLocationRef.current,
+      timeEnabled: timeEnabledRef.current,
     }),
   }));
 

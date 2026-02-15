@@ -103,14 +103,16 @@ export function ProviderForm({
         <DialogHeader>
           <DialogTitle>{isEdit ? '编辑 Provider' : '添加 Provider'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           <div className="space-y-2">
             <Label htmlFor="id">ID</Label>
             <Input
               id="id"
+              name="provider-id"
               value={form.id}
               onChange={e => setForm(f => ({ ...f, id: e.target.value }))}
               placeholder="e.g. openai, deepseek"
+              autoComplete="off"
               disabled={isEdit}
               required
             />
@@ -119,9 +121,11 @@ export function ProviderForm({
             <Label htmlFor="name">显示名称</Label>
             <Input
               id="name"
+              name="provider-name"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               placeholder="e.g. OpenAI"
+              autoComplete="off"
               required
             />
           </div>
@@ -162,9 +166,11 @@ export function ProviderForm({
             <Label htmlFor="base_url">Base URL</Label>
             <Input
               id="base_url"
+              name="provider-url"
               value={form.base_url}
               onChange={e => setForm(f => ({ ...f, base_url: e.target.value }))}
               placeholder="https://api.openai.com/v1"
+              autoComplete="off"
               required
             />
           </div>
@@ -172,10 +178,15 @@ export function ProviderForm({
             <Label htmlFor="api_key">API Key</Label>
             <Input
               id="api_key"
+              name="provider-apikey"
               type="password"
               value={form.api_key}
               onChange={e => setForm(f => ({ ...f, api_key: e.target.value }))}
               placeholder={isEdit ? '留空则不修改' : '输入 API Key'}
+              autoComplete="new-password"
+              data-form-type="other"
+              data-lpignore="true"
+              role="presentation"
             />
           </div>
           <div className="flex items-center gap-2">

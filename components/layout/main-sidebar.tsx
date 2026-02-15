@@ -129,20 +129,6 @@ export function MainSidebar({
             <span>大模型对话</span>
           </button>
         </Link>
-
-        <Link href="/chat/agents/browse">
-          <button
-            className={cn(
-              'w-full h-10 rounded-lg flex items-center gap-3 px-3 text-sm font-medium transition-all duration-200',
-              pathname?.startsWith('/chat/agents/browse')
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-foreground hover:bg-accent'
-            )}
-          >
-            <Sparkles className="h-4 w-4 flex-shrink-0" />
-            <span>智能体广场</span>
-          </button>
-        </Link>
       </div>
 
       <div className="mx-4 h-px bg-border/50 mb-3" />
@@ -231,7 +217,7 @@ export function MainSidebar({
       {/* Footer Actions */}
       <div className="p-3 pt-2 border-t border-border/50">
         <div className="flex items-center gap-1.5">
-          <Link href="/settings/general" className="flex-1">
+          <Link href="/settings" className="flex-1">
             <button
               className={cn(
                 'w-full h-8 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all duration-200',

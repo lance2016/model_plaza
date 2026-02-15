@@ -12,39 +12,54 @@ import { getLanguageModel } from '@/lib/ai';
 export const maxDuration = 60;
 
 // Build system context with current time and other info
-function buildSystemContext(userLocation?: { latitude: number; longitude: number; city?: string; country?: string }): string {
-  const now = new Date();
+function buildSystemContext(
+  userLocation?: { latitude: number; longitude: number; city?: string; country?: string },
+  timeEnabled: boolean = true
+): string {
+  if (!timeEnabled && !userLocation) {
+    return ''; // No context to inject
+  }
+
+  const parts: string[] = [];
   
-  // Format time in user-friendly way
-  const dateStr = now.toLocaleDateString('zh-CN', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric',
-    weekday: 'long'
-  });
-  
-  const timeStr = now.toLocaleTimeString('zh-CN', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: false
-  });
-  
-  let context = `[系统信息]\n当前时间: ${dateStr} ${timeStr}`;
-  
-  // Add timezone
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  context += `\n时区: ${timezone}`;
+  // Add time info if enabled
+  if (timeEnabled) {
+    const now = new Date();
+    
+    // Format time in user-friendly way
+    const dateStr = now.toLocaleDateString('zh-CN', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      weekday: 'long'
+    });
+    
+    const timeStr = now.toLocaleTimeString('zh-CN', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false
+    });
+    
+    parts.push(`当前时间: ${dateStr} ${timeStr}`);
+    
+    // Add timezone
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    parts.push(`时区: ${timezone}`);
+  }
   
   // Add location if provided
   if (userLocation) {
-    context += `\n用户位置: `;
+    let locationStr = '用户位置: ';
     if (userLocation.city && userLocation.country) {
-      context += `${userLocation.country} ${userLocation.city}`;
+      locationStr += `${userLocation.country} ${userLocation.city}`;
     }
-    context += `\n经纬度: (${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)})`;
+    locationStr += `\n经纬度: (${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)})`;
+    parts.push(locationStr);
   }
   
-  return context;
+  if (parts.length === 0) return '';
+  
+  return `[系统信息]\n${parts.join('\n')}`;
 }
 
 // Convert UIMessage to CoreMessage format, extracting file parts as images
@@ -119,6 +134,7 @@ export async function POST(req: Request) {
       agentId,
       enabledTools,
       userLocation,
+      timeEnabled,
     }: {
       messages: UIMessage[];
       modelId: string;
@@ -139,6 +155,7 @@ export async function POST(req: Request) {
         city?: string;
         country?: string;
       };
+      timeEnabled?: boolean; // Whether to inject time info
     } = await req.json();
 
     console.log('=== Chat API Request ===');
@@ -191,7 +208,7 @@ export async function POST(req: Request) {
     const chatPrompt = chatConfig?.systemPrompt || '';
     
     // Build system context (time, location, etc)
-    const systemContext = buildSystemContext(userLocation);
+    const systemContext = buildSystemContext(userLocation, timeEnabled ?? true);
 
     const finalMessages: CoreMessage[] = [];
     if (globalPrompt || chatPrompt || systemContext) {
@@ -223,49 +240,53 @@ export async function POST(req: Request) {
 
     // Build tools map if agent session and Tavily key is configured
     const tavilyApiKey = agentId ? getSetting('tavily_api_key') : undefined;
-    const tools = tavilyApiKey ? {
-      web_search: tool({
-        description: '搜索互联网获取最新信息。当用户询问实时信息、最新事件、需要验证的事实时使用。',
-        inputSchema: jsonSchema<{ query: string }>({
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: '搜索关键词，使用简洁准确的关键词' },
-          },
-          required: ['query'],
-        }),
-        execute: async ({ query }: { query: string }) => {
-          console.log('🔍 Web search:', query);
-          try {
-            const res = await fetch('https://api.tavily.com/search', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                api_key: tavilyApiKey,
-                query,
-                max_results: 5,
-                include_answer: true,
-              }),
-            });
-            if (!res.ok) {
-              const err = await res.text();
-              console.error('Tavily error:', err);
-              return { error: '搜索失败，请稍后重试' };
+    
+    let tools = undefined;
+    if (tavilyApiKey && enabledTools?.includes('web_search')) {
+      tools = {
+        web_search: tool({
+          description: '搜索互联网获取最新信息。当用户询问实时信息、最新事件、需要验证的事实时使用。',
+          inputSchema: jsonSchema<{ query: string }>({
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: '搜索关键词，使用简洁准确的关键词' },
+            },
+            required: ['query'],
+          }),
+          execute: async ({ query }: { query: string }) => {
+            console.log('🔍 Web search:', query);
+            try {
+              const res = await fetch('https://api.tavily.com/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  api_key: tavilyApiKey,
+                  query,
+                  max_results: 5,
+                  include_answer: true,
+                }),
+              });
+              if (!res.ok) {
+                const err = await res.text();
+                console.error('Tavily error:', err);
+                return { error: '搜索失败，请稍后重试' };
+              }
+              const data = await res.json();
+              return {
+                answer: data.answer || '',
+                results: (data.results || []).map((r: { title: string; url: string; content: string }) => ({
+                  title: r.title,
+                  url: r.url,
+                  content: r.content,
+                })),
+              };
+            } catch (e) {
+              console.error('Web search error:', e);
+              return { error: '搜索请求失败' };
             }
-            const data = await res.json();
-            return {
-              answer: data.answer || '',
-              results: (data.results || []).map((r: { title: string; url: string; content: string }) => ({
-                title: r.title,
-                url: r.url,
-                content: r.content,
-              })),
-            };
-          } catch (e) {
-            console.error('Web search error:', e);
-            return { error: '搜索请求失败' };
-          }
-        },
-      });
+          },
+        }),
+      };
     }
 
     // Build streamText options with custom config or model defaults
@@ -279,7 +300,7 @@ export async function POST(req: Request) {
       presencePenalty: chatConfig?.presencePenalty,
     };
 
-    if (Object.keys(tools).length > 0) {
+    if (tools && Object.keys(tools).length > 0) {
       streamOptions.tools = tools;
       streamOptions.stopWhen = stepCountIs(3);
     }
@@ -299,7 +320,7 @@ export async function POST(req: Request) {
       hasGlobalPrompt: !!globalPrompt,
       temperature: streamOptions.temperature,
       maxTokens: streamOptions.maxTokens,
-      hasTools: Object.keys(tools).length > 0,
+      hasTools: tools ? Object.keys(tools).length > 0 : false,
     });
 
     const result = streamText(streamOptions as never);
